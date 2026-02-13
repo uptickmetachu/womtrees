@@ -14,7 +14,7 @@ from womtrees.db import (
     list_work_items,
     update_work_item,
 )
-from womtrees.worktree import create_worktree, get_current_repo, remove_worktree
+from womtrees.worktree import create_worktree, get_current_repo, remove_worktree, sanitize_branch_name
 
 
 @click.group()
@@ -67,7 +67,9 @@ def start(item_id: int) -> None:
 
 
 def _start_work_item(conn, item_id: int, config) -> None:
-    """Shared logic for starting a work item."""
+    """Shared logic for starting a work item: create worktree + tmux session."""
+    from womtrees import tmux
+
     item = get_work_item(conn, item_id)
     if item is None:
         raise click.ClickException(f"WorkItem #{item_id} not found.")
@@ -76,9 +78,33 @@ def _start_work_item(conn, item_id: int, config) -> None:
             f"Cannot start #{item_id}, status is '{item.status}' (expected 'todo')."
         )
 
+    if not tmux.is_available():
+        raise click.ClickException("tmux is required. Install it with: brew install tmux")
+
+    # Create worktree
     wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
-    update_work_item(conn, item_id, status="working", worktree_path=str(wt_path))
-    click.echo(f"Started #{item_id}: {wt_path}")
+
+    # Create tmux session
+    session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
+    session_name = tmux.create_session(session_name, str(wt_path))
+
+    # Set environment variable for Claude hook detection
+    tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
+
+    # Split pane: the initial pane becomes the shell, the split becomes the Claude pane
+    tmux.split_pane(session_name, config.tmux_split, str(wt_path))
+
+    # If Claude pane should be on the left/top, swap so it comes first
+    if config.tmux_claude_pane in ("left", "top"):
+        tmux.swap_pane(session_name)
+
+    update_work_item(
+        conn, item_id,
+        status="working",
+        worktree_path=str(wt_path),
+        tmux_session=session_name,
+    )
+    click.echo(f"Started #{item_id} in tmux session '{session_name}'")
 
 
 @cli.command("list")
@@ -130,6 +156,7 @@ def status(item_id: int | None, show_all: bool) -> None:
         click.echo(f"  Branch:   {item.branch}")
         click.echo(f"  Status:   {item.status}")
         click.echo(f"  Path:     {item.worktree_path or '(not created)'}")
+        click.echo(f"  Tmux:     {item.tmux_session or '(none)'}")
         click.echo(f"  Prompt:   {item.prompt or '(none)'}")
         click.echo(f"  Created:  {item.created_at}")
         click.echo(f"  Updated:  {item.updated_at}")
@@ -156,6 +183,8 @@ def status(item_id: int | None, show_all: bool) -> None:
 @click.option("--force", is_flag=True, help="Force delete an active work item.")
 def delete(item_id: int, force: bool) -> None:
     """Delete a work item and its worktree."""
+    from womtrees import tmux
+
     conn = get_connection()
     item = get_work_item(conn, item_id)
     if item is None:
@@ -174,6 +203,10 @@ def delete(item_id: int, force: bool) -> None:
             click.echo("Aborted.")
             return
 
+    # Kill tmux session if it exists
+    if item.tmux_session and tmux.session_exists(item.tmux_session):
+        tmux.kill_session(item.tmux_session)
+
     if item.worktree_path:
         try:
             remove_worktree(item.worktree_path)
@@ -183,6 +216,26 @@ def delete(item_id: int, force: bool) -> None:
     delete_work_item(conn, item_id)
     conn.close()
     click.echo(f"Deleted #{item_id}")
+
+
+@cli.command()
+@click.argument("item_id", type=int)
+def attach(item_id: int) -> None:
+    """Attach to a work item's tmux session."""
+    from womtrees import tmux
+
+    conn = get_connection()
+    item = get_work_item(conn, item_id)
+    conn.close()
+
+    if item is None:
+        raise click.ClickException(f"WorkItem #{item_id} not found.")
+    if not item.tmux_session:
+        raise click.ClickException(f"WorkItem #{item_id} has no tmux session.")
+    if not tmux.session_exists(item.tmux_session):
+        raise click.ClickException(f"Tmux session '{item.tmux_session}' no longer exists.")
+
+    tmux.attach(item.tmux_session)
 
 
 @cli.command()
