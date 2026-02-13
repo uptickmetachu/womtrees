@@ -16,6 +16,11 @@ base_dir = "~/.local/share/womtrees"
 [tmux]
 split = "vertical"
 claude_pane = "left"
+
+[claude]
+# Extra args passed to `claude` when launching in a worktree pane.
+# e.g. "--dangerously-skip-permissions" to skip the trust-folder prompt.
+# args = "--dangerously-skip-permissions"
 """
 
 
@@ -24,6 +29,7 @@ class Config:
     base_dir: Path
     tmux_split: str  # vertical | horizontal
     tmux_claude_pane: str  # left | right | top | bottom
+    claude_args: str  # extra CLI args for claude
 
     @classmethod
     def load(cls) -> Config:
@@ -40,10 +46,14 @@ class Config:
         tmux_split = tmux.get("split", "vertical")
         tmux_claude_pane = tmux.get("claude_pane", "left")
 
+        claude = data.get("claude", {})
+        claude_args = claude.get("args", "")
+
         return cls(
             base_dir=base_dir,
             tmux_split=tmux_split,
             tmux_claude_pane=tmux_claude_pane,
+            claude_args=claude_args,
         )
 
 

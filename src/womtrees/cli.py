@@ -88,54 +88,64 @@ def _start_work_item(conn, item_id: int, config) -> None:
     # Create worktree
     wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
 
-    # Create tmux session
-    session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
-    session_name = tmux.create_session(session_name, str(wt_path))
+    # Persist worktree_path immediately so delete can clean up on failure
+    update_work_item(conn, item_id, worktree_path=str(wt_path))
 
-    # Set environment variable for Claude hook detection
-    tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
+    try:
+        # Create tmux session
+        session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
+        session_name, shell_pane_id = tmux.create_session(session_name, str(wt_path))
 
-    # Split pane: the initial pane becomes the shell, the split becomes the Claude pane
-    claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
+        # Set environment variable for Claude hook detection
+        tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
 
-    # If Claude pane should be on the left/top, swap so it comes first
-    if config.tmux_claude_pane in ("left", "top"):
-        tmux.swap_pane(session_name)
+        # Split pane: creates a second pane for Claude
+        claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
 
-    # Launch Claude in the Claude pane and pipe the prompt
-    # After swap, pane 0 is Claude pane when claude_pane is left/top
-    if config.tmux_claude_pane in ("left", "top"):
-        claude_target = f"{session_name}:0.0"
-    else:
-        claude_target = f"{session_name}:0.1"
+        # If Claude pane should be on the left/top, swap so it comes first visually
+        if config.tmux_claude_pane in ("left", "top"):
+            tmux.swap_pane(session_name)
 
-    if item.prompt:
-        # Use claude with --prompt for interactive mode with initial prompt
-        escaped_prompt = item.prompt.replace("'", "'\\''")
-        tmux.send_keys(claude_target, f"claude '{escaped_prompt}'")
-    else:
-        tmux.send_keys(claude_target, "claude")
+        # Launch Claude using the pane ID (immune to base-index settings)
+        claude_cmd = "claude"
+        if config.claude_args:
+            claude_cmd += f" {config.claude_args}"
+        if item.prompt:
+            escaped_prompt = item.prompt.replace("'", "'\\''")
+            claude_cmd += f" '{escaped_prompt}'"
+        tmux.send_keys(claude_pane_id, claude_cmd)
 
-    # Create a ClaudeSession record
-    create_claude_session(
-        conn,
-        repo_name=item.repo_name,
-        repo_path=item.repo_path,
-        branch=item.branch,
-        tmux_session=session_name,
-        tmux_pane=claude_target.split(".")[-1] if "." in claude_target else "0",
-        work_item_id=item_id,
-        state="working",
-        prompt=item.prompt,
-    )
+        # Create a ClaudeSession record
+        create_claude_session(
+            conn,
+            repo_name=item.repo_name,
+            repo_path=item.repo_path,
+            branch=item.branch,
+            tmux_session=session_name,
+            tmux_pane=claude_pane_id,
+            work_item_id=item_id,
+            state="working",
+            prompt=item.prompt,
+        )
 
-    update_work_item(
-        conn, item_id,
-        status="working",
-        worktree_path=str(wt_path),
-        tmux_session=session_name,
-    )
-    click.echo(f"Started #{item_id} in tmux session '{session_name}'")
+        update_work_item(
+            conn, item_id,
+            status="working",
+            tmux_session=session_name,
+        )
+        click.echo(f"Started #{item_id} in tmux session '{session_name}'")
+    except Exception:
+        # Clean up on failure: remove worktree and kill tmux session if created
+        try:
+            remove_worktree(wt_path)
+        except Exception:
+            pass
+        try:
+            tmux.kill_session(session_name)
+        except Exception:
+            pass
+        update_work_item(conn, item_id, worktree_path=None)
+        raise
 
 
 @cli.command("list")
@@ -338,6 +348,23 @@ def done(item_id: int) -> None:
     update_work_item(conn, item_id, status="done")
     conn.close()
     click.echo(f"#{item_id} marked as done")
+
+
+@cli.command()
+@click.option("--all", "show_all", is_flag=True, help="Show all repos.")
+def board(show_all: bool) -> None:
+    """Open the kanban board TUI."""
+    from womtrees.tui.app import WomtreesApp
+    app = WomtreesApp(show_all=show_all)
+    app.run()
+
+
+@cli.command("sqlite")
+def sqlite_cmd() -> None:
+    """Open the womtrees database in sqlite3."""
+    config = get_config()
+    db_path = config.base_dir / "womtrees.db"
+    subprocess.run(["sqlite3", str(db_path)])
 
 
 @cli.command()

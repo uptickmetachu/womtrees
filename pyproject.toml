@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "click",
+    "textual",
 ]
 
 [project.scripts]
@@ -21,4 +22,5 @@ packages = ["src/womtrees"]
 [dependency-groups]
 dev = [
     "pytest",
+    "pytest-asyncio",
 ]

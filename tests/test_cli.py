@@ -190,7 +190,7 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
          patch("womtrees.cli.get_config", return_value=mock_config), \
          patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
          patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value="myrepo/feat-x") as mock_create, \
+         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")) as mock_create, \
          patch("womtrees.tmux.set_environment") as mock_setenv, \
          patch("womtrees.tmux.split_pane", return_value="%1") as mock_split, \
          patch("womtrees.tmux.swap_pane") as mock_swap, \
@@ -222,7 +222,7 @@ def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path):
          patch("womtrees.cli.get_config", return_value=mock_config), \
          patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
          patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value="myrepo/feat-x"), \
+         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")), \
          patch("womtrees.tmux.set_environment"), \
          patch("womtrees.tmux.split_pane", return_value="%1"), \
          patch("womtrees.tmux.swap_pane") as mock_swap, \
@@ -264,7 +264,7 @@ def test_delete_kills_tmux_session(runner, db_conn, tmp_path):
          patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
          patch("womtrees.cli.remove_worktree"), \
          patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value="myrepo/feat-x"), \
+         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")), \
          patch("womtrees.tmux.set_environment"), \
          patch("womtrees.tmux.split_pane", return_value="%1"), \
          patch("womtrees.tmux.swap_pane"), \
@@ -294,7 +294,7 @@ def test_attach_command(runner, db_conn, tmp_path):
          patch("womtrees.cli.get_config", return_value=mock_config), \
          patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
          patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value="myrepo/feat-x"), \
+         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")), \
          patch("womtrees.tmux.set_environment"), \
          patch("womtrees.tmux.split_pane", return_value="%1"), \
          patch("womtrees.tmux.swap_pane"), \
