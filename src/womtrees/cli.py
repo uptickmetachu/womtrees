@@ -319,10 +319,10 @@ def review(item_id: int) -> None:
     if item is None:
         conn.close()
         raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if item.status != "working":
+    if item.status not in ("working", "input"):
         conn.close()
         raise click.ClickException(
-            f"Cannot review #{item_id}, status is '{item.status}' (expected 'working')."
+            f"Cannot review #{item_id}, status is '{item.status}' (expected 'working' or 'input')."
         )
 
     update_work_item(conn, item_id, status="review")
@@ -339,10 +339,10 @@ def done(item_id: int) -> None:
     if item is None:
         conn.close()
         raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if item.status != "review":
+    if item.status not in ("working", "input", "review"):
         conn.close()
         raise click.ClickException(
-            f"Cannot mark #{item_id} done, status is '{item.status}' (expected 'review')."
+            f"Cannot mark #{item_id} done, status is '{item.status}' (expected 'working', 'input', or 'review')."
         )
 
     update_work_item(conn, item_id, status="done")
@@ -437,14 +437,20 @@ def install() -> None:
 
 @hook.command()
 def heartbeat() -> None:
-    """Signal that Claude is actively working."""
-    _handle_hook("working")
+    """Signal that Claude is actively working (PostToolUse)."""
+    _handle_hook(session_state="working", item_status="working")
+
+
+@hook.command("input")
+def hook_input() -> None:
+    """Signal that Claude needs user input (Notification)."""
+    _handle_hook(session_state="waiting", item_status="input")
 
 
 @hook.command()
 def stop() -> None:
-    """Signal that Claude has stopped (waiting for input)."""
-    _handle_hook("waiting")
+    """Signal that Claude has finished (Stop)."""
+    _handle_hook(session_state="done", item_status="review")
 
 
 @hook.command()
@@ -456,8 +462,12 @@ def mark_done(session_id: int) -> None:
     conn.close()
 
 
-def _handle_hook(state: str) -> None:
-    """Shared logic for heartbeat and stop hooks."""
+def _handle_hook(session_state: str, item_status: str) -> None:
+    """Shared logic for hook commands.
+
+    Updates the Claude session state and, if a linked work item exists,
+    transitions it to the given item_status.
+    """
     from womtrees.claude import detect_context
 
     ctx = detect_context()
@@ -472,10 +482,11 @@ def _handle_hook(state: str) -> None:
     session = find_claude_session(conn, ctx["tmux_session"], ctx["tmux_pane"])
 
     if session:
-        update_claude_session(conn, session.id, state=state, pid=ctx["pid"])
+        update_claude_session(conn, session.id, state=session_state, pid=ctx["pid"])
+        work_item_id = session.work_item_id
     else:
         # Create new session
-        create_claude_session(
+        cs = create_claude_session(
             conn,
             repo_name=ctx["repo_name"] or "unknown",
             repo_path=ctx["repo_path"] or "",
@@ -484,7 +495,14 @@ def _handle_hook(state: str) -> None:
             tmux_pane=ctx["tmux_pane"],
             pid=ctx["pid"],
             work_item_id=ctx["work_item_id"],
-            state=state,
+            state=session_state,
         )
+        work_item_id = cs.work_item_id
+
+    # Drive work item status from hooks
+    if work_item_id is not None:
+        item = get_work_item(conn, work_item_id)
+        if item and item.status not in ("todo", "done"):
+            update_work_item(conn, work_item_id, status=item_status)
 
     conn.close()

@@ -104,11 +104,11 @@ class TestClaudeStateMapping:
     def test_working_maps_to_working(self):
         assert CLAUDE_STATE_TO_STATUS["working"] == "working"
 
-    def test_waiting_maps_to_working(self):
-        assert CLAUDE_STATE_TO_STATUS["waiting"] == "working"
+    def test_waiting_maps_to_input(self):
+        assert CLAUDE_STATE_TO_STATUS["waiting"] == "input"
 
-    def test_done_maps_to_done(self):
-        assert CLAUDE_STATE_TO_STATUS["done"] == "done"
+    def test_done_maps_to_review(self):
+        assert CLAUDE_STATE_TO_STATUS["done"] == "review"
 
 
 # -- Async TUI tests --
@@ -129,8 +129,8 @@ async def test_app_mounts():
                 async with app.run_test(size=(120, 40)) as pilot:
                     board = app.query_one("#board", KanbanBoard)
                     assert board is not None
-                    assert len(board.columns) == 4
-                    assert list(board.columns.keys()) == ["todo", "working", "review", "done"]
+                    assert len(board.columns) == 5
+                    assert list(board.columns.keys()) == ["todo", "working", "input", "review", "done"]
 
 
 @pytest.mark.asyncio

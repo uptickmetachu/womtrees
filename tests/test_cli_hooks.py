@@ -13,7 +13,9 @@ from womtrees.db import (
     create_work_item,
     find_claude_session,
     get_claude_session,
+    get_work_item,
     list_claude_sessions,
+    update_work_item,
 )
 
 
@@ -98,8 +100,8 @@ def test_hook_heartbeat_updates_existing(runner, db_conn):
     assert sessions[0].state == "working"
 
 
-def test_hook_stop_sets_waiting(runner, db_conn):
-    """Test that stop hook sets session to waiting."""
+def test_hook_stop_sets_done(runner, db_conn):
+    """Test that stop hook sets session to done."""
     get_conn_fn, db_path = db_conn
 
     mock_context = {
@@ -115,6 +117,31 @@ def test_hook_stop_sets_waiting(runner, db_conn):
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.claude.detect_context", return_value=mock_context):
         result = runner.invoke(cli, ["hook", "stop"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    sessions = list_claude_sessions(conn)
+    assert len(sessions) == 1
+    assert sessions[0].state == "done"
+
+
+def test_hook_input_sets_waiting(runner, db_conn):
+    """Test that input hook sets session to waiting."""
+    get_conn_fn, db_path = db_conn
+
+    mock_context = {
+        "tmux_session": "myrepo/feat-auth",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": None,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "input"])
         assert result.exit_code == 0
 
     conn = get_conn_fn()
@@ -237,3 +264,168 @@ def test_hook_install_command(runner, tmp_path):
         assert result.exit_code == 0
         assert "Installed" in result.output
         mock_install.assert_called_once()
+
+
+def test_hook_heartbeat_moves_item_to_working(runner, db_conn):
+    """Test that heartbeat moves a linked work item to working status."""
+    get_conn_fn, db_path = db_conn
+
+    conn = get_conn_fn()
+    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
+    update_work_item(conn, item.id, status="input")
+    create_claude_session(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth",
+        tmux_session="s1", tmux_pane="%1", state="waiting",
+        work_item_id=item.id,
+    )
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": item.id,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "heartbeat"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    updated = get_work_item(conn, item.id)
+    assert updated.status == "working"
+
+
+def test_hook_input_moves_item_to_input(runner, db_conn):
+    """Test that input hook moves a linked work item to input status."""
+    get_conn_fn, db_path = db_conn
+
+    conn = get_conn_fn()
+    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
+    update_work_item(conn, item.id, status="working")
+    create_claude_session(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth",
+        tmux_session="s1", tmux_pane="%1", state="working",
+        work_item_id=item.id,
+    )
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": item.id,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "input"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    updated = get_work_item(conn, item.id)
+    assert updated.status == "input"
+
+
+def test_hook_stop_moves_item_to_review(runner, db_conn):
+    """Test that stop hook moves a linked work item to review status."""
+    get_conn_fn, db_path = db_conn
+
+    conn = get_conn_fn()
+    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
+    update_work_item(conn, item.id, status="working")
+    create_claude_session(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth",
+        tmux_session="s1", tmux_pane="%1", state="working",
+        work_item_id=item.id,
+    )
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": item.id,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "stop"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    updated = get_work_item(conn, item.id)
+    assert updated.status == "review"
+
+
+def test_hook_skips_todo_items(runner, db_conn):
+    """Test that hooks don't transition items in TODO status."""
+    get_conn_fn, db_path = db_conn
+
+    conn = get_conn_fn()
+    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
+    # Item stays in 'todo' (default)
+    create_claude_session(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth",
+        tmux_session="s1", tmux_pane="%1", state="working",
+        work_item_id=item.id,
+    )
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": item.id,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "stop"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    updated = get_work_item(conn, item.id)
+    assert updated.status == "todo"
+
+
+def test_hook_skips_done_items(runner, db_conn):
+    """Test that hooks don't transition items in DONE status."""
+    get_conn_fn, db_path = db_conn
+
+    conn = get_conn_fn()
+    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
+    update_work_item(conn, item.id, status="done")
+    create_claude_session(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth",
+        tmux_session="s1", tmux_pane="%1", state="done",
+        work_item_id=item.id,
+    )
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": item.id,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "heartbeat"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    updated = get_work_item(conn, item.id)
+    assert updated.status == "done"

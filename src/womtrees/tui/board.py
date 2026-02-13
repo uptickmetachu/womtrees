@@ -7,18 +7,18 @@ from womtrees.models import ClaudeSession, WorkItem
 from womtrees.tui.column import KanbanColumn
 
 
-STATUSES = ["todo", "working", "review", "done"]
+STATUSES = ["todo", "working", "input", "review", "done"]
 
 # Map Claude session states to the kanban column they should appear in
 CLAUDE_STATE_TO_STATUS = {
     "working": "working",
-    "waiting": "working",
-    "done": "done",
+    "waiting": "input",
+    "done": "review",
 }
 
 
 class KanbanBoard(Horizontal):
-    """The main kanban board with 4 status columns."""
+    """The main kanban board with 5 status columns."""
 
     DEFAULT_CSS = """
     KanbanBoard {
