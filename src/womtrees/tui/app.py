@@ -143,7 +143,7 @@ class WomtreesApp(App):
                     return
 
     def _update_status_bar(self, items, sessions) -> None:
-        counts = {"todo": 0, "working": 0, "review": 0, "done": 0}
+        counts = {"todo": 0, "working": 0, "input": 0, "review": 0, "done": 0}
         for item in items:
             counts[item.status] = counts.get(item.status, 0) + 1
 
@@ -154,6 +154,7 @@ class WomtreesApp(App):
             f"{repo_label} | "
             f"{counts['todo']} todo | "
             f"{counts['working']} working | "
+            f"{counts['input']} input | "
             f"{counts['review']} review | "
             f"{counts['done']} done"
         )
@@ -184,7 +185,7 @@ class WomtreesApp(App):
             self._focus_first_card_in_column()
 
     def action_next_column(self) -> None:
-        if self.active_column_idx < 3:
+        if self.active_column_idx < 4:
             self.active_column_idx += 1
             self._focus_first_card_in_column()
 
@@ -327,8 +328,8 @@ class WomtreesApp(App):
         card = self._get_focused_card()
         if not isinstance(card, WorkItemCard):
             return
-        if card.work_item.status != "working":
-            self.notify("Can only review WORKING items", severity="warning")
+        if card.work_item.status not in ("working", "input"):
+            self.notify("Can only review WORKING or INPUT items", severity="warning")
             return
 
         conn = get_connection()
@@ -341,8 +342,8 @@ class WomtreesApp(App):
         card = self._get_focused_card()
         if not isinstance(card, WorkItemCard):
             return
-        if card.work_item.status != "review":
-            self.notify("Can only mark REVIEW items as done", severity="warning")
+        if card.work_item.status not in ("working", "input", "review"):
+            self.notify("Can only mark active items as done", severity="warning")
             return
 
         conn = get_connection()

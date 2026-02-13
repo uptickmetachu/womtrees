@@ -127,7 +127,7 @@ def test_review_transition(runner, db_conn):
         # Can't review a TODO
         result = runner.invoke(cli, ["review", "1"])
         assert result.exit_code != 0
-        assert "expected 'working'" in result.output
+        assert "expected 'working' or 'input'" in result.output
 
 
 def test_done_transition(runner, db_conn):
@@ -139,7 +139,7 @@ def test_done_transition(runner, db_conn):
         # Can't mark TODO as done
         result = runner.invoke(cli, ["done", "1"])
         assert result.exit_code != 0
-        assert "expected 'review'" in result.output
+        assert "expected 'working', 'input', or 'review'" in result.output
 
 
 def test_delete_todo(runner, db_conn):

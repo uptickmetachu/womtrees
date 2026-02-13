@@ -24,8 +24,15 @@ def test_install_global_hooks_fresh(mock_file, mock_dir, tmp_path):
     assert "hooks" in data
     assert "PostToolUse" in data["hooks"]
     assert "Stop" in data["hooks"]
-    assert any("wt hook heartbeat" in h["command"] for h in data["hooks"]["PostToolUse"])
-    assert any("wt hook stop" in h["command"] for h in data["hooks"]["Stop"])
+    # New format: each entry has a "hooks" array with handler objects
+    assert any(
+        any("wt hook heartbeat" in handler.get("command", "") for handler in entry.get("hooks", []))
+        for entry in data["hooks"]["PostToolUse"]
+    )
+    assert any(
+        any("wt hook stop" in handler.get("command", "") for handler in entry.get("hooks", []))
+        for entry in data["hooks"]["Stop"]
+    )
 
 
 @patch("womtrees.claude.CLAUDE_SETTINGS_DIR")
@@ -56,9 +63,12 @@ def test_install_global_hooks_no_duplicate(mock_file, mock_dir, tmp_path):
         install_global_hooks()
 
     data = json.loads(settings_file.read_text())
-    # Should only have one heartbeat hook
-    heartbeat_hooks = [h for h in data["hooks"]["PostToolUse"] if "wt hook" in h["command"]]
-    assert len(heartbeat_hooks) == 1
+    # Should only have one heartbeat hook entry
+    heartbeat_entries = [
+        entry for entry in data["hooks"]["PostToolUse"]
+        if any("wt hook" in handler.get("command", "") for handler in entry.get("hooks", []))
+    ]
+    assert len(heartbeat_entries) == 1
 
 
 @patch("subprocess.run")

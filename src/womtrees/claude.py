@@ -14,17 +14,51 @@ WOMTREE_HOOKS = {
         "PostToolUse": [
             {
                 "matcher": "",
-                "command": "wt hook heartbeat",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "wt hook heartbeat",
+                    }
+                ],
+            }
+        ],
+        "Notification": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "wt hook input",
+                    }
+                ],
             }
         ],
         "Stop": [
             {
                 "matcher": "",
-                "command": "wt hook stop",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "wt hook stop",
+                    }
+                ],
             }
         ],
     }
 }
+
+
+def _has_wt_hook(entries: list[dict]) -> bool:
+    """Check if any entry in a hook event list already contains a wt hook command."""
+    for entry in entries:
+        # New format: {"hooks": [{"type": "command", "command": "wt hook ..."}]}
+        for handler in entry.get("hooks", []):
+            if "wt hook" in handler.get("command", ""):
+                return True
+        # Old format: {"command": "wt hook ..."}
+        if "wt hook" in entry.get("command", ""):
+            return True
+    return False
 
 
 def install_global_hooks() -> None:
@@ -43,7 +77,7 @@ def install_global_hooks() -> None:
         existing = hooks.get(event, [])
         for hook in hook_list:
             # Don't duplicate — check if wt hook command already present
-            if not any("wt hook" in h.get("command", "") for h in existing):
+            if not _has_wt_hook(existing):
                 existing.append(hook)
         hooks[event] = existing
 
