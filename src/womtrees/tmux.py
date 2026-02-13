@@ -10,13 +10,16 @@ def _run(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
 
 
 def sanitize_session_name(name: str) -> str:
-    """Sanitize a name for use as a tmux session name (no dots or colons)."""
-    name = re.sub(r"[.:]", "-", name)
+    """Sanitize a name for use as a tmux session name (no dots, colons, or slashes)."""
+    name = re.sub(r"[.:/ ]", "-", name)
     return name
 
 
-def create_session(name: str, working_dir: str) -> str:
-    """Create a detached tmux session. Returns the session name used."""
+def create_session(name: str, working_dir: str) -> tuple[str, str]:
+    """Create a detached tmux session.
+
+    Returns (session_name, initial_pane_id) where pane_id is like '%0'.
+    """
     name = sanitize_session_name(name)
 
     # If session name already exists, append a numeric suffix
@@ -26,8 +29,12 @@ def create_session(name: str, working_dir: str) -> str:
             i += 1
         name = f"{name}-{i}"
 
-    _run(["tmux", "new-session", "-d", "-s", name, "-c", working_dir])
-    return name
+    result = _run([
+        "tmux", "new-session", "-d", "-s", name, "-c", working_dir,
+        "-P", "-F", "#{pane_id}",
+    ])
+    pane_id = result.stdout.strip()
+    return name, pane_id
 
 
 def split_pane(session: str, direction: str, working_dir: str) -> str:
