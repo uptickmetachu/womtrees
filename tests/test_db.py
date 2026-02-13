@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import sqlite3
+
+from womtrees.db import (
+    _ensure_schema,
+    create_work_item,
+    delete_work_item,
+    get_connection,
+    get_work_item,
+    list_work_items,
+    update_work_item,
+)
+
+
+def _in_memory_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _ensure_schema(conn)
+    return conn
+
+
+def test_create_and_get():
+    conn = _in_memory_conn()
+    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth", prompt="Add login")
+    assert item.id == 1
+    assert item.repo_name == "myrepo"
+    assert item.branch == "feat/auth"
+    assert item.prompt == "Add login"
+    assert item.status == "todo"
+    assert item.worktree_path is None
+
+    fetched = get_work_item(conn, 1)
+    assert fetched is not None
+    assert fetched.id == item.id
+    assert fetched.branch == item.branch
+
+
+def test_get_nonexistent():
+    conn = _in_memory_conn()
+    assert get_work_item(conn, 999) is None
+
+
+def test_list_all():
+    conn = _in_memory_conn()
+    create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
+    create_work_item(conn, "repo2", "/tmp/repo2", "branch-b")
+    create_work_item(conn, "repo1", "/tmp/repo1", "branch-c")
+
+    items = list_work_items(conn)
+    assert len(items) == 3
+
+
+def test_list_by_repo():
+    conn = _in_memory_conn()
+    create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
+    create_work_item(conn, "repo2", "/tmp/repo2", "branch-b")
+    create_work_item(conn, "repo1", "/tmp/repo1", "branch-c")
+
+    items = list_work_items(conn, repo_name="repo1")
+    assert len(items) == 2
+    assert all(i.repo_name == "repo1" for i in items)
+
+
+def test_list_by_status():
+    conn = _in_memory_conn()
+    create_work_item(conn, "repo1", "/tmp/repo1", "a", status="todo")
+    create_work_item(conn, "repo1", "/tmp/repo1", "b", status="working")
+    create_work_item(conn, "repo1", "/tmp/repo1", "c", status="todo")
+
+    items = list_work_items(conn, status="todo")
+    assert len(items) == 2
+    assert all(i.status == "todo" for i in items)
+
+
+def test_update():
+    conn = _in_memory_conn()
+    item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
+
+    updated = update_work_item(conn, item.id, status="working", worktree_path="/tmp/wt")
+    assert updated is not None
+    assert updated.status == "working"
+    assert updated.worktree_path == "/tmp/wt"
+    assert updated.updated_at > item.updated_at
+
+
+def test_delete():
+    conn = _in_memory_conn()
+    item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
+
+    assert delete_work_item(conn, item.id) is True
+    assert get_work_item(conn, item.id) is None
+
+
+def test_delete_nonexistent():
+    conn = _in_memory_conn()
+    assert delete_work_item(conn, 999) is False
