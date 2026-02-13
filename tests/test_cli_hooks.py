@@ -230,10 +230,10 @@ def test_sessions_empty(runner, db_conn):
         assert "No Claude sessions found" in result.output
 
 
-def test_setup_command(runner, tmp_path):
-    """Test wt setup installs hooks."""
+def test_hook_install_command(runner, tmp_path):
+    """Test wt hook install installs Claude Code hooks."""
     with patch("womtrees.claude.install_global_hooks") as mock_install:
-        result = runner.invoke(cli, ["setup"])
+        result = runner.invoke(cli, ["hook", "install"])
         assert result.exit_code == 0
         assert "Installed" in result.output
         mock_install.assert_called_once()

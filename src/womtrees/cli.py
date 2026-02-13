@@ -380,12 +380,6 @@ def config(edit: bool) -> None:
         click.echo(config_path.read_text())
 
 
-@cli.command()
-def setup() -> None:
-    """Install Claude Code hooks for automatic session tracking."""
-    from womtrees.claude import install_global_hooks
-    install_global_hooks()
-    click.echo("Installed womtrees hooks into Claude Code settings.")
 
 
 @cli.command("sessions")
@@ -431,6 +425,14 @@ def sessions_cmd(show_all: bool) -> None:
 @cli.group()
 def hook() -> None:
     """Internal hook commands (called by Claude Code)."""
+
+
+@hook.command()
+def install() -> None:
+    """Install Claude Code hooks for automatic session tracking."""
+    from womtrees.claude import install_global_hooks
+    install_global_hooks()
+    click.echo("Installed womtrees hooks into Claude Code settings.")
 
 
 @hook.command()
