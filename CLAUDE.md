@@ -18,3 +18,8 @@ Git worktree manager with tmux and Claude Code integration. CLI + TUI kanban boa
 uv run wt <command>      # Run CLI during development
 uv run pytest            # Run tests
 ```
+
+
+## Feature work
+Always implement things via AB testing and R-E-D (RED)  format for worktree, terminal etc.
+

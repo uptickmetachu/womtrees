@@ -7,7 +7,7 @@ from pathlib import Path
 from womtrees.config import get_config
 from womtrees.models import WorkItem
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS work_items (
     branch TEXT NOT NULL,
     prompt TEXT,
     worktree_path TEXT,
+    tmux_session TEXT,
     status TEXT NOT NULL DEFAULT 'todo',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -29,6 +30,10 @@ CREATE TABLE IF NOT EXISTS work_items (
 CREATE INDEX IF NOT EXISTS idx_work_items_repo ON work_items(repo_name);
 CREATE INDEX IF NOT EXISTS idx_work_items_status ON work_items(status);
 """
+
+MIGRATIONS = {
+    2: ["ALTER TABLE work_items ADD COLUMN tmux_session TEXT"],
+}
 
 
 def _now() -> str:
@@ -43,6 +48,7 @@ def _row_to_work_item(row: sqlite3.Row) -> WorkItem:
         branch=row["branch"],
         prompt=row["prompt"],
         worktree_path=row["worktree_path"],
+        tmux_session=row["tmux_session"],
         status=row["status"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -70,6 +76,17 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if row is None:
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
         conn.commit()
+    else:
+        current = row["version"]
+        for version in sorted(MIGRATIONS):
+            if current < version:
+                for sql in MIGRATIONS[version]:
+                    try:
+                        conn.execute(sql)
+                    except sqlite3.OperationalError:
+                        pass  # Column already exists
+                conn.execute("UPDATE schema_version SET version = ?", (version,))
+                conn.commit()
 
 
 def create_work_item(

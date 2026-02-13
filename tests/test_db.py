@@ -29,6 +29,7 @@ def test_create_and_get():
     assert item.prompt == "Add login"
     assert item.status == "todo"
     assert item.worktree_path is None
+    assert item.tmux_session is None
 
     fetched = get_work_item(conn, 1)
     assert fetched is not None
@@ -77,10 +78,11 @@ def test_update():
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
 
-    updated = update_work_item(conn, item.id, status="working", worktree_path="/tmp/wt")
+    updated = update_work_item(conn, item.id, status="working", worktree_path="/tmp/wt", tmux_session="repo/branch")
     assert updated is not None
     assert updated.status == "working"
     assert updated.worktree_path == "/tmp/wt"
+    assert updated.tmux_session == "repo/branch"
     assert updated.updated_at > item.updated_at
 
 

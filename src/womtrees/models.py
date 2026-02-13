@@ -11,6 +11,7 @@ class WorkItem:
     branch: str
     prompt: str | None
     worktree_path: str | None
+    tmux_session: str | None
     status: str  # todo, working, review, done
     created_at: str
     updated_at: str
