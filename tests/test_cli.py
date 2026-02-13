@@ -193,7 +193,8 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
          patch("womtrees.tmux.create_session", return_value="myrepo/feat-x") as mock_create, \
          patch("womtrees.tmux.set_environment") as mock_setenv, \
          patch("womtrees.tmux.split_pane", return_value="%1") as mock_split, \
-         patch("womtrees.tmux.swap_pane") as mock_swap:
+         patch("womtrees.tmux.swap_pane") as mock_swap, \
+         patch("womtrees.tmux.send_keys"):
         runner.invoke(cli, ["todo", "-b", "feat/x", "-p", "test prompt"])
 
         result = runner.invoke(cli, ["start", "1"])
@@ -224,7 +225,8 @@ def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path):
          patch("womtrees.tmux.create_session", return_value="myrepo/feat-x"), \
          patch("womtrees.tmux.set_environment"), \
          patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane") as mock_swap:
+         patch("womtrees.tmux.swap_pane") as mock_swap, \
+         patch("womtrees.tmux.send_keys"):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         result = runner.invoke(cli, ["start", "1"])
         assert result.exit_code == 0
@@ -266,6 +268,7 @@ def test_delete_kills_tmux_session(runner, db_conn, tmp_path):
          patch("womtrees.tmux.set_environment"), \
          patch("womtrees.tmux.split_pane", return_value="%1"), \
          patch("womtrees.tmux.swap_pane"), \
+         patch("womtrees.tmux.send_keys"), \
          patch("womtrees.tmux.session_exists", return_value=True), \
          patch("womtrees.tmux.kill_session") as mock_kill:
         runner.invoke(cli, ["todo", "-b", "feat/x"])
@@ -295,6 +298,7 @@ def test_attach_command(runner, db_conn, tmp_path):
          patch("womtrees.tmux.set_environment"), \
          patch("womtrees.tmux.split_pane", return_value="%1"), \
          patch("womtrees.tmux.swap_pane"), \
+         patch("womtrees.tmux.send_keys"), \
          patch("womtrees.tmux.session_exists", return_value=True), \
          patch("womtrees.tmux.attach") as mock_attach:
         runner.invoke(cli, ["todo", "-b", "feat/x"])

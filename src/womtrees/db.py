@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from womtrees.config import get_config
-from womtrees.models import WorkItem
+from womtrees.models import ClaudeSession, WorkItem
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -29,10 +29,46 @@ CREATE TABLE IF NOT EXISTS work_items (
 
 CREATE INDEX IF NOT EXISTS idx_work_items_repo ON work_items(repo_name);
 CREATE INDEX IF NOT EXISTS idx_work_items_status ON work_items(status);
+
+CREATE TABLE IF NOT EXISTS claude_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_item_id INTEGER REFERENCES work_items(id),
+    repo_name TEXT NOT NULL,
+    repo_path TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    tmux_session TEXT NOT NULL,
+    tmux_pane TEXT NOT NULL,
+    pid INTEGER,
+    state TEXT NOT NULL DEFAULT 'working',
+    prompt TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item ON claude_sessions(work_item_id);
+CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state);
 """
 
 MIGRATIONS = {
     2: ["ALTER TABLE work_items ADD COLUMN tmux_session TEXT"],
+    3: [
+        """CREATE TABLE IF NOT EXISTS claude_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_item_id INTEGER REFERENCES work_items(id),
+            repo_name TEXT NOT NULL,
+            repo_path TEXT NOT NULL,
+            branch TEXT NOT NULL,
+            tmux_session TEXT NOT NULL,
+            tmux_pane TEXT NOT NULL,
+            pid INTEGER,
+            state TEXT NOT NULL DEFAULT 'working',
+            prompt TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item ON claude_sessions(work_item_id)",
+        "CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state)",
+    ],
 }
 
 
@@ -50,6 +86,23 @@ def _row_to_work_item(row: sqlite3.Row) -> WorkItem:
         worktree_path=row["worktree_path"],
         tmux_session=row["tmux_session"],
         status=row["status"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_claude_session(row: sqlite3.Row) -> ClaudeSession:
+    return ClaudeSession(
+        id=row["id"],
+        work_item_id=row["work_item_id"],
+        repo_name=row["repo_name"],
+        repo_path=row["repo_path"],
+        branch=row["branch"],
+        tmux_session=row["tmux_session"],
+        tmux_pane=row["tmux_pane"],
+        pid=row["pid"],
+        state=row["state"],
+        prompt=row["prompt"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -84,9 +137,12 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
                     try:
                         conn.execute(sql)
                     except sqlite3.OperationalError:
-                        pass  # Column already exists
+                        pass  # Table/column already exists
                 conn.execute("UPDATE schema_version SET version = ?", (version,))
                 conn.commit()
+
+
+# -- WorkItem CRUD --
 
 
 def create_work_item(
@@ -153,3 +209,98 @@ def delete_work_item(conn: sqlite3.Connection, item_id: int) -> bool:
     cursor = conn.execute("DELETE FROM work_items WHERE id = ?", (item_id,))
     conn.commit()
     return cursor.rowcount > 0
+
+
+# -- ClaudeSession CRUD --
+
+
+def create_claude_session(
+    conn: sqlite3.Connection,
+    repo_name: str,
+    repo_path: str,
+    branch: str,
+    tmux_session: str,
+    tmux_pane: str,
+    pid: int | None = None,
+    work_item_id: int | None = None,
+    state: str = "working",
+    prompt: str | None = None,
+) -> ClaudeSession:
+    now = _now()
+    cursor = conn.execute(
+        """INSERT INTO claude_sessions
+           (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, now, now),
+    )
+    conn.commit()
+    return get_claude_session(conn, cursor.lastrowid)
+
+
+def get_claude_session(conn: sqlite3.Connection, session_id: int) -> ClaudeSession | None:
+    cursor = conn.execute("SELECT * FROM claude_sessions WHERE id = ?", (session_id,))
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return _row_to_claude_session(row)
+
+
+def list_claude_sessions(
+    conn: sqlite3.Connection,
+    work_item_id: int | None = None,
+    repo_name: str | None = None,
+    state: str | None = None,
+) -> list[ClaudeSession]:
+    query = "SELECT * FROM claude_sessions WHERE 1=1"
+    params: list = []
+
+    if work_item_id is not None:
+        query += " AND work_item_id = ?"
+        params.append(work_item_id)
+
+    if repo_name is not None:
+        query += " AND repo_name = ?"
+        params.append(repo_name)
+
+    if state is not None:
+        query += " AND state = ?"
+        params.append(state)
+
+    query += " ORDER BY id"
+    cursor = conn.execute(query, params)
+    return [_row_to_claude_session(row) for row in cursor.fetchall()]
+
+
+def update_claude_session(conn: sqlite3.Connection, session_id: int, **fields) -> ClaudeSession | None:
+    if not fields:
+        return get_claude_session(conn, session_id)
+
+    fields["updated_at"] = _now()
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [session_id]
+
+    conn.execute(f"UPDATE claude_sessions SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    return get_claude_session(conn, session_id)
+
+
+def delete_claude_session(conn: sqlite3.Connection, session_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM claude_sessions WHERE id = ?", (session_id,))
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def find_claude_session(
+    conn: sqlite3.Connection,
+    tmux_session: str,
+    tmux_pane: str,
+) -> ClaudeSession | None:
+    """Find a Claude session by tmux session and pane."""
+    cursor = conn.execute(
+        "SELECT * FROM claude_sessions WHERE tmux_session = ? AND tmux_pane = ? AND state != 'done' ORDER BY id DESC LIMIT 1",
+        (tmux_session, tmux_pane),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return _row_to_claude_session(row)
