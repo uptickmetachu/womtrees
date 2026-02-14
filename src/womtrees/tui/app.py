@@ -88,8 +88,24 @@ class WomtreesApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._db_path = get_config().base_dir / "womtrees.db"
+        self._wal_path = self._db_path.parent / (self._db_path.name + "-wal")
+        self._last_db_mtime: float = 0
         self._refresh_board()
-        self.set_interval(3, self._refresh_board)
+        self.set_interval(0.5, self._check_refresh)
+        self.set_interval(10, self._refresh_board)
+
+    def _check_refresh(self) -> None:
+        """Check DB/WAL file mtime; refresh only if changed."""
+        mtime: float = 0
+        for path in (self._db_path, self._wal_path):
+            try:
+                mtime = max(mtime, path.stat().st_mtime)
+            except FileNotFoundError:
+                continue
+        if mtime and mtime != self._last_db_mtime:
+            self._last_db_mtime = mtime
+            self._refresh_board()
 
     def _refresh_board(self) -> None:
         """Reload data from SQLite and refresh the board."""
