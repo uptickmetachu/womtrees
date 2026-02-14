@@ -29,5 +29,6 @@ class ClaudeSession:
     pid: int | None
     state: str  # working, waiting, done
     prompt: str | None
+    claude_session_id: str | None  # Claude Code's own session UUID for --resume
     created_at: str
     updated_at: str

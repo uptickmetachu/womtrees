@@ -51,6 +51,7 @@ def _make_session(
     pid: int | None = 1234,
     state: str = "working",
     prompt: str | None = None,
+    claude_session_id: str | None = None,
 ) -> ClaudeSession:
     now = datetime.now(timezone.utc).isoformat()
     return ClaudeSession(
@@ -64,6 +65,7 @@ def _make_session(
         pid=pid,
         state=state,
         prompt=prompt,
+        claude_session_id=claude_session_id,
         created_at=now,
         updated_at=now,
     )

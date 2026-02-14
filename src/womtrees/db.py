@@ -7,7 +7,7 @@ from pathlib import Path
 from womtrees.config import get_config
 from womtrees.models import ClaudeSession, WorkItem
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS claude_sessions (
     pid INTEGER,
     state TEXT NOT NULL DEFAULT 'working',
     prompt TEXT,
+    claude_session_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -52,6 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state);
 MIGRATIONS = {
     2: ["ALTER TABLE work_items ADD COLUMN tmux_session TEXT"],
     3: [
+
         """CREATE TABLE IF NOT EXISTS claude_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             work_item_id INTEGER REFERENCES work_items(id),
@@ -69,6 +71,7 @@ MIGRATIONS = {
         "CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item ON claude_sessions(work_item_id)",
         "CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state)",
     ],
+    4: ["ALTER TABLE claude_sessions ADD COLUMN claude_session_id TEXT"],
 }
 
 
@@ -103,6 +106,7 @@ def _row_to_claude_session(row: sqlite3.Row) -> ClaudeSession:
         pid=row["pid"],
         state=row["state"],
         prompt=row["prompt"],
+        claude_session_id=row["claude_session_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -226,13 +230,14 @@ def create_claude_session(
     work_item_id: int | None = None,
     state: str = "working",
     prompt: str | None = None,
+    claude_session_id: str | None = None,
 ) -> ClaudeSession:
     now = _now()
     cursor = conn.execute(
         """INSERT INTO claude_sessions
-           (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, now, now),
+           (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, claude_session_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, claude_session_id, now, now),
     )
     conn.commit()
     return get_claude_session(conn, cursor.lastrowid)

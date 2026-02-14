@@ -429,3 +429,85 @@ def test_hook_skips_done_items(runner, db_conn):
     conn = get_conn_fn()
     updated = get_work_item(conn, item.id)
     assert updated.status == "done"
+
+
+def test_hook_heartbeat_captures_session_id(runner, db_conn):
+    """Test that heartbeat reads Claude session_id from stdin."""
+    get_conn_fn, db_path = db_conn
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": None,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "heartbeat"], input='{"session_id": "abc-123-def"}')
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    sessions = list_claude_sessions(conn)
+    assert len(sessions) == 1
+    assert sessions[0].claude_session_id == "abc-123-def"
+
+
+def test_hook_heartbeat_updates_session_id(runner, db_conn):
+    """Test that heartbeat updates claude_session_id on existing sessions."""
+    get_conn_fn, db_path = db_conn
+
+    # Pre-create a session without claude_session_id
+    conn = get_conn_fn()
+    create_claude_session(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth",
+        tmux_session="s1", tmux_pane="%1", state="working", pid=1234,
+    )
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": None,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "heartbeat"], input='{"session_id": "new-uuid-456"}')
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    sessions = list_claude_sessions(conn)
+    assert len(sessions) == 1
+    assert sessions[0].claude_session_id == "new-uuid-456"
+
+
+def test_hook_heartbeat_no_stdin(runner, db_conn):
+    """Test that heartbeat works without stdin (no session_id captured)."""
+    get_conn_fn, db_path = db_conn
+
+    mock_context = {
+        "tmux_session": "s1",
+        "tmux_pane": "%1",
+        "repo_name": "myrepo",
+        "repo_path": "/tmp/myrepo",
+        "branch": "feat/auth",
+        "work_item_id": None,
+        "pid": 1234,
+    }
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.claude.detect_context", return_value=mock_context):
+        result = runner.invoke(cli, ["hook", "heartbeat"])
+        assert result.exit_code == 0
+
+    conn = get_conn_fn()
+    sessions = list_claude_sessions(conn)
+    assert len(sessions) == 1
+    assert sessions[0].claude_session_id is None
