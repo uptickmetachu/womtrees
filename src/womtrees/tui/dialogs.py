@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Grid, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, TextArea
@@ -8,6 +9,11 @@ from textual.widgets import Button, Input, Label, TextArea
 
 class CreateDialog(ModalScreen[dict | None]):
     """Modal dialog for creating a new WorkItem."""
+
+    BINDINGS = [
+        Binding("ctrl+enter", "submit", "Submit", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
 
     DEFAULT_CSS = """
     CreateDialog {
@@ -59,24 +65,35 @@ class CreateDialog(ModalScreen[dict | None]):
                 yield Button("Submit", variant="primary", id="submit")
                 yield Button("Cancel", id="cancel")
 
+    def action_submit(self) -> None:
+        name_input = self.query_one("#name-input", Input)
+        branch_input = self.query_one("#branch-input", Input)
+        prompt_input = self.query_one("#prompt-input", TextArea)
+        name = name_input.value.strip() or None
+        branch = branch_input.value.strip()
+        prompt = prompt_input.text.strip() or None
+        if branch:
+            self.dismiss({"branch": branch, "prompt": prompt, "name": name, "mode": self.mode})
+        else:
+            branch_input.focus()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
-            name_input = self.query_one("#name-input", Input)
-            branch_input = self.query_one("#branch-input", Input)
-            prompt_input = self.query_one("#prompt-input", TextArea)
-            name = name_input.value.strip() or None
-            branch = branch_input.value.strip()
-            prompt = prompt_input.text.strip() or None
-            if branch:
-                self.dismiss({"branch": branch, "prompt": prompt, "name": name, "mode": self.mode})
-            else:
-                branch_input.focus()
+            self.action_submit()
         elif event.button.id == "cancel":
-            self.dismiss(None)
+            self.action_cancel()
 
 
 class DeleteDialog(ModalScreen[bool]):
     """Confirmation dialog for deleting a WorkItem."""
+
+    BINDINGS = [
+        Binding("ctrl+enter", "confirm", "Confirm", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
 
     DEFAULT_CSS = """
     DeleteDialog {
@@ -113,8 +130,17 @@ class DeleteDialog(ModalScreen[bool]):
                 yield Button("Delete", variant="error", id="confirm")
                 yield Button("Cancel", variant="primary", id="cancel")
 
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.dismiss(event.button.id == "confirm")
+        if event.button.id == "confirm":
+            self.action_confirm()
+        else:
+            self.action_cancel()
 
 
 class HelpDialog(ModalScreen):
