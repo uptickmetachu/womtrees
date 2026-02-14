@@ -211,8 +211,8 @@ async def test_app_mounts():
                 async with app.run_test(size=(120, 40)) as pilot:
                     board = app.query_one("#board", KanbanBoard)
                     assert board is not None
-                    assert len(board.columns) == 5
-                    assert list(board.columns.keys()) == ["todo", "working", "input", "review", "done"]
+                    assert len(board.columns) == 4
+                    assert list(board.columns.keys()) == ["todo", "working", "input", "review"]
 
 
 @pytest.mark.asyncio
@@ -239,12 +239,9 @@ async def test_app_shows_items():
                     todo_cards = board.columns["todo"].get_focusable_cards()
                     working_cards = board.columns["working"].get_focusable_cards()
                     review_cards = board.columns["review"].get_focusable_cards()
-                    done_cards = board.columns["done"].get_focusable_cards()
-
                     assert len(todo_cards) == 1
                     assert len(working_cards) == 1
                     assert len(review_cards) == 1
-                    assert len(done_cards) == 0
 
 
 @pytest.mark.asyncio

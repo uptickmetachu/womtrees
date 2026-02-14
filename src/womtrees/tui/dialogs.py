@@ -150,7 +150,6 @@ class HelpDialog(ModalScreen):
             yield Label("c         Create & launch")
             yield Label("t         Create TODO")
             yield Label("r         Move to review")
-            yield Label("D         Move to done")
             yield Label("d         Delete")
             yield Label("g         Toggle repo grouping")
             yield Label("a         Toggle all/repo view")
