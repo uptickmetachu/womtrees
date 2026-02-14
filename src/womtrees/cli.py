@@ -26,20 +26,29 @@ def cli() -> None:
     """womtrees — git worktree manager with tmux and Claude Code integration."""
 
 
+def _resolve_repo(repo_path_str: str | None) -> tuple[str, str]:
+    """Resolve repo from --repo option or current git context."""
+    if repo_path_str is not None:
+        from pathlib import Path
+        resolved = Path(repo_path_str).expanduser().resolve()
+        return resolved.name, str(resolved)
+    repo = get_current_repo()
+    if repo is None:
+        raise click.ClickException("Not inside a git repository.")
+    return repo
+
+
 @cli.command()
 @click.option("-b", "--branch", required=True, help="Branch name for the worktree.")
 @click.option("-p", "--prompt", default=None, help="Task description / Claude prompt.")
 @click.option("-n", "--name", default=None, help="Human-readable name for the work item.")
-def todo(branch: str, prompt: str | None, name: str | None) -> None:
+@click.option("-r", "--repo", "repo_path", default=None, help="Target repo path (default: current git repo).")
+def todo(branch: str, prompt: str | None, name: str | None, repo_path: str | None) -> None:
     """Create a TODO work item (queued for later)."""
-    repo = get_current_repo()
-    if repo is None:
-        raise click.ClickException("Not inside a git repository.")
-
-    repo_name, repo_path = repo
+    repo_name, resolved_path = _resolve_repo(repo_path)
     conn = get_connection()
     try:
-        item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
+        item = create_work_item(conn, repo_name, resolved_path, branch, prompt, status="todo", name=name)
     except ValueError as e:
         conn.close()
         raise click.ClickException(str(e))
@@ -51,18 +60,15 @@ def todo(branch: str, prompt: str | None, name: str | None) -> None:
 @click.option("-b", "--branch", required=True, help="Branch name for the worktree.")
 @click.option("-p", "--prompt", default=None, help="Task description / Claude prompt.")
 @click.option("-n", "--name", default=None, help="Human-readable name for the work item.")
-def create(branch: str, prompt: str | None, name: str | None) -> None:
+@click.option("-r", "--repo", "repo_path", default=None, help="Target repo path (default: current git repo).")
+def create(branch: str, prompt: str | None, name: str | None, repo_path: str | None) -> None:
     """Create a work item and immediately launch it."""
-    repo = get_current_repo()
-    if repo is None:
-        raise click.ClickException("Not inside a git repository.")
-
-    repo_name, repo_path = repo
+    repo_name, resolved_path = _resolve_repo(repo_path)
     config = get_config()
     conn = get_connection()
 
     try:
-        item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
+        item = create_work_item(conn, repo_name, resolved_path, branch, prompt, status="todo", name=name)
     except ValueError as e:
         conn.close()
         raise click.ClickException(str(e))

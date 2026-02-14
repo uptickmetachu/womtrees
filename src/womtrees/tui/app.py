@@ -14,13 +14,14 @@ from womtrees.db import (
     get_connection,
     get_work_item,
     list_claude_sessions,
+    list_repos,
     list_work_items,
     update_work_item,
 )
 from womtrees.tui.board import KanbanBoard
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 from womtrees.tui.column import KanbanColumn
-from womtrees.tui.dialogs import CreateDialog, DeleteDialog, HelpDialog
+from womtrees.tui.dialogs import CreateDialog, DeleteDialog, HelpDialog, MergeDialog
 from womtrees.worktree import get_current_repo
 
 
@@ -63,6 +64,7 @@ class WomtreesApp(App):
         Binding("c", "create_item", "Create", show=True),
         Binding("t", "todo_item", "Todo", show=True),
         Binding("r", "review_item", "Review", show=True),
+        Binding("m", "merge_item", "Merge", show=True),
         Binding("d", "delete_item", "Delete", show=True),
         Binding("g", "toggle_grouping", "Group", show=True),
         Binding("a", "toggle_all", "All", show=True),
@@ -80,7 +82,7 @@ class WomtreesApp(App):
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
             yield Static(
-                "[s]tart [d]elete [r]eview [Enter]jump [g]roup [a]ll [?]help [q]uit",
+                "[s]tart [r]eview [m]erge [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
                 id="status-keys",
             )
             yield Static("", id="status-counts")
@@ -323,21 +325,33 @@ class WomtreesApp(App):
 
         self._refresh_board()
 
+    def _get_repos_for_dialog(self) -> list[tuple[str, str]]:
+        conn = get_connection()
+        try:
+            return list_repos(conn)
+        finally:
+            conn.close()
+
     def action_create_item(self) -> None:
-        self.push_screen(CreateDialog(mode="create"), self._on_create_dialog)
+        repos = self._get_repos_for_dialog()
+        self.push_screen(
+            CreateDialog(mode="create", repos=repos, default_repo=self.repo_context),
+            self._on_create_dialog,
+        )
 
     def action_todo_item(self) -> None:
-        self.push_screen(CreateDialog(mode="todo"), self._on_create_dialog)
+        repos = self._get_repos_for_dialog()
+        self.push_screen(
+            CreateDialog(mode="todo", repos=repos, default_repo=self.repo_context),
+            self._on_create_dialog,
+        )
 
     def _on_create_dialog(self, result: dict | None) -> None:
         if result is None:
             return
 
-        if self.repo_context is None:
-            self.notify("Not in a git repository", severity="error")
-            return
-
-        repo_name, repo_path = self.repo_context
+        repo_name = result["repo_name"]
+        repo_path = result["repo_path"]
         conn = get_connection()
         try:
             item = create_work_item(conn, repo_name, repo_path, result["branch"], result["prompt"], name=result.get("name"))
@@ -372,6 +386,73 @@ class WomtreesApp(App):
         update_work_item(conn, card.work_item.id, status="review")
         conn.close()
         self.notify(f"#{card.work_item.id} moved to review")
+        self._refresh_board()
+
+    def action_merge_item(self) -> None:
+        """Merge a review item's branch into the default branch."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+        if card.work_item.status != "review":
+            self.notify("Can only merge REVIEW items", severity="warning")
+            return
+
+        from womtrees.worktree import get_default_branch
+
+        item = card.work_item
+        target = get_default_branch(item.repo_path)
+        msg = f"Merge #{item.id} ({item.branch}) into {target}?"
+
+        self.push_screen(
+            MergeDialog(msg),
+            lambda confirmed: self._on_merge_confirmed(confirmed, item.id),
+        )
+
+    def _on_merge_confirmed(self, confirmed: bool, item_id: int) -> None:
+        if not confirmed:
+            return
+
+        from womtrees import tmux
+        from womtrees.worktree import merge_branch, remove_worktree
+
+        conn = get_connection()
+        item = get_work_item(conn, item_id)
+        if item is None:
+            conn.close()
+            return
+
+        try:
+            merge_branch(item.repo_path, item.branch)
+        except subprocess.CalledProcessError as e:
+            conn.close()
+            self.notify(f"Merge failed: {e.stderr.strip()}", severity="error")
+            return
+
+        # Clean up tmux session
+        if item.tmux_session and tmux.session_exists(item.tmux_session):
+            tmux.kill_session(item.tmux_session)
+
+        # Clean up worktree
+        if item.worktree_path:
+            try:
+                remove_worktree(item.worktree_path)
+            except subprocess.CalledProcessError:
+                pass
+
+        # Delete the branch after merge
+        try:
+            subprocess.run(
+                ["git", "-C", item.repo_path, "branch", "-d", item.branch],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError:
+            pass
+
+        update_work_item(conn, item_id, status="done")
+        conn.close()
+        self.notify(f"#{item_id} merged and done")
         self._refresh_board()
 
     def action_delete_item(self) -> None:

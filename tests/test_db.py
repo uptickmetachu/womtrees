@@ -10,6 +10,7 @@ from womtrees.db import (
     delete_work_item,
     get_connection,
     get_work_item,
+    list_repos,
     list_work_items,
     update_work_item,
 )
@@ -115,6 +116,33 @@ def test_duplicate_branch_allowed_after_done():
     # Should succeed — previous item is done
     item2 = create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
     assert item2.id != item.id
+
+
+def test_list_repos_empty():
+    conn = _in_memory_conn()
+    assert list_repos(conn) == []
+
+
+def test_list_repos_distinct():
+    conn = _in_memory_conn()
+    create_work_item(conn, "repo1", "/tmp/repo1", "a")
+    create_work_item(conn, "repo2", "/tmp/repo2", "b")
+    create_work_item(conn, "repo1", "/tmp/repo1", "c")  # duplicate repo
+
+    repos = list_repos(conn)
+    assert len(repos) == 2
+    assert ("repo1", "/tmp/repo1") in repos
+    assert ("repo2", "/tmp/repo2") in repos
+
+
+def test_list_repos_ordered():
+    conn = _in_memory_conn()
+    create_work_item(conn, "zebra", "/tmp/zebra", "a")
+    create_work_item(conn, "alpha", "/tmp/alpha", "b")
+
+    repos = list_repos(conn)
+    assert repos[0][0] == "alpha"
+    assert repos[1][0] == "zebra"
 
 
 def test_duplicate_branch_allowed_different_repo():
