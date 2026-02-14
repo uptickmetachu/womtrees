@@ -79,21 +79,23 @@ WOMTREE_HOOKS = {
 }
 
 
-def _has_wt_hook(entries: list[dict]) -> bool:
-    """Check if any entry in a hook event list already contains a wt hook command."""
-    for entry in entries:
-        # New format: {"hooks": [{"type": "command", "command": "wt hook ..."}]}
-        for handler in entry.get("hooks", []):
-            if "wt hook" in handler.get("command", ""):
-                return True
-        # Old format: {"command": "wt hook ..."}
-        if "wt hook" in entry.get("command", ""):
+def _is_wt_hook_entry(entry: dict) -> bool:
+    """Check if a hook entry contains a wt hook command."""
+    for handler in entry.get("hooks", []):
+        if "wt hook" in handler.get("command", ""):
             return True
+    # Old format: {"command": "wt hook ..."}
+    if "wt hook" in entry.get("command", ""):
+        return True
     return False
 
 
 def install_global_hooks() -> None:
-    """Install womtrees hooks into Claude Code's global settings."""
+    """Install womtrees hooks into Claude Code's global settings.
+
+    Strips all existing wt hook entries per event, then adds the current
+    ones fresh. This handles additions, removals, and matcher changes.
+    """
     CLAUDE_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
     if CLAUDE_SETTINGS_FILE.exists():
@@ -104,12 +106,14 @@ def install_global_hooks() -> None:
 
     hooks = settings.get("hooks", {})
 
+    # Clean stale wt hook entries from ALL events (including ones we no longer use)
+    for event in list(hooks.keys()):
+        hooks[event] = [e for e in hooks[event] if not _is_wt_hook_entry(e)]
+
+    # Add current wt hook entries
     for event, hook_list in WOMTREE_HOOKS["hooks"].items():
         existing = hooks.get(event, [])
-        for hook in hook_list:
-            # Don't duplicate — check if wt hook command already present
-            if not _has_wt_hook(existing):
-                existing.append(hook)
+        existing.extend(hook_list)
         hooks[event] = existing
 
     settings["hooks"] = hooks
