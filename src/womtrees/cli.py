@@ -288,10 +288,8 @@ def _maybe_resume_claude(conn, item_id: int) -> None:
     if not sessions:
         return
 
-    # Use the most recent non-done session
-    session = next((s for s in reversed(sessions) if s.state != "done"), None)
-    if session is None:
-        return
+    # Use the most recent session (including done — we resume those too)
+    session = sessions[-1]
 
     # Check if Claude is still alive (if no PID recorded, assume alive)
     if not session.pid or is_pid_alive(session.pid):
