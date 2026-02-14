@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, TextArea
+from textual.widgets import Button, Input, Label, RichLog, Select, TextArea
 
 
 class CreateDialog(ModalScreen[dict | None]):
@@ -401,6 +404,154 @@ class AutoRebaseDialog(ModalScreen[bool]):
             self.action_confirm()
         else:
             self.action_cancel()
+
+
+class ClaudeStreamDialog(ModalScreen[dict[str, Any] | None]):
+    """Floating modal that streams output from a Claude session.
+
+    Shows a RichLog with live text / tool-use indicators, a status line,
+    and a Cancel / Close button.
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel_or_close", "Cancel/Close", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    ClaudeStreamDialog {
+        align: center middle;
+    }
+
+    ClaudeStreamDialog #dialog {
+        width: 90%;
+        height: 80%;
+        padding: 1 2;
+        border: thick $accent;
+        background: $surface;
+    }
+
+    ClaudeStreamDialog #title-label {
+        text-style: bold;
+        margin: 0 0 1 0;
+    }
+
+    ClaudeStreamDialog #status-label {
+        color: $text-muted;
+        margin: 0 0 1 0;
+    }
+
+    ClaudeStreamDialog #stream-log {
+        height: 1fr;
+        border: round $primary-background;
+    }
+
+    ClaudeStreamDialog .buttons {
+        height: auto;
+        margin: 1 0 0 0;
+        align: center middle;
+    }
+
+    ClaudeStreamDialog .buttons Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(
+        self,
+        title: str,
+        prompt: str,
+        cwd: str,
+        on_result: Callable[[], dict[str, Any] | None] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._title = title
+        self._prompt = prompt
+        self._cwd = cwd
+        self._on_result = on_result
+        self._session: Any = None
+        self._finished = False
+        self._result: dict[str, Any] | None = None
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(f"[bold]{self._title}[/bold]", id="title-label")
+            yield Label("Running...", id="status-label")
+            yield RichLog(highlight=True, wrap=True, markup=True, id="stream-log")
+            with Grid(classes="buttons"):
+                yield Button("Cancel", variant="error", id="cancel-btn")
+
+    def on_mount(self) -> None:
+        self.run_worker(self._run_stream(), exclusive=True)
+
+    async def _run_stream(self) -> None:
+        from womtrees.claude import (
+            ClaudeCancelledError,
+            ClaudeResultEvent,
+            ClaudeTextEvent,
+            ClaudeToolEvent,
+            start_claude_session,
+        )
+
+        log = self.query_one("#stream-log", RichLog)
+        status = self.query_one("#status-label", Label)
+
+        self._session = start_claude_session(
+            prompt=self._prompt,
+            cwd=self._cwd,
+        )
+
+        try:
+            async for event in self._session.events:
+                if isinstance(event, ClaudeTextEvent):
+                    log.write(event.text)
+                elif isinstance(event, ClaudeToolEvent):
+                    log.write(f"\n[dim]▶ Tool: {event.tool_name}[/dim]")
+                elif isinstance(event, ClaudeResultEvent):
+                    self._finished = True
+                    cost = f" (${event.cost_usd:.4f})" if event.cost_usd else ""
+                    if event.is_error:
+                        status.update(f"[red]Error{cost}[/red]")
+                    else:
+                        status.update(f"[green]Done{cost}[/green]")
+                    self._swap_to_close_button()
+                    if self._on_result is not None:
+                        try:
+                            self._result = self._on_result()
+                        except Exception:
+                            pass
+        except ClaudeCancelledError:
+            status.update("[yellow]Cancelled[/yellow]")
+            self._finished = True
+            self._swap_to_close_button()
+        except Exception as exc:
+            status.update(f"[red]Error: {exc}[/red]")
+            self._finished = True
+            self._swap_to_close_button()
+
+    def _swap_to_close_button(self) -> None:
+        btn = self.query_one("#cancel-btn", Button)
+        btn.label = "Close"
+        btn.variant = "primary"
+        btn.id = "close-btn"
+
+    async def _do_cancel(self) -> None:
+        if self._session is not None and not self._finished:
+            status = self.query_one("#status-label", Label)
+            status.update("[yellow]Cancelling...[/yellow]")
+            await self._session.cancel()
+
+    def action_cancel_or_close(self) -> None:
+        if self._finished:
+            self.dismiss(self._result)
+        else:
+            self.run_worker(self._do_cancel(), exclusive=True)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel-btn":
+            self.run_worker(self._do_cancel(), exclusive=True)
+        elif event.button.id == "close-btn":
+            self.dismiss(self._result)
 
 
 class HelpDialog(ModalScreen):
