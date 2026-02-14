@@ -21,7 +21,7 @@ from womtrees.db import (
 from womtrees.worktree import create_worktree, get_current_repo, remove_worktree, sanitize_branch_name
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli() -> None:
     """womtrees — git worktree manager with tmux and Claude Code integration."""
 
