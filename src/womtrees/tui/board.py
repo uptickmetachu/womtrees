@@ -3,7 +3,7 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 
-from womtrees.models import ClaudeSession, PullRequest, WorkItem
+from womtrees.models import ClaudeSession, GitStats, PullRequest, WorkItem
 from womtrees.tui.column import KanbanColumn
 
 
@@ -43,6 +43,7 @@ class KanbanBoard(Horizontal):
         sessions: list[ClaudeSession],
         group_by_repo: bool,
         pull_requests: list[PullRequest] | None = None,
+        git_stats: dict[int, GitStats] | None = None,
     ) -> None:
         """Refresh all columns with new data."""
         # Group items by status
@@ -78,4 +79,5 @@ class KanbanBoard(Horizontal):
                 unmanaged_by_status[status],
                 group_by_repo,
                 prs_by_item,
+                git_stats=git_stats,
             )

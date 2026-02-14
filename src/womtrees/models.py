@@ -32,6 +32,13 @@ class PullRequest:
 
 
 @dataclass
+class GitStats:
+    uncommitted: bool
+    insertions: int
+    deletions: int
+
+
+@dataclass
 class ClaudeSession:
     id: int
     work_item_id: int | None

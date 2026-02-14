@@ -215,6 +215,40 @@ def auto_rebase_branch(worktree_path: str, branch: str, default_branch: str) -> 
     return result.stdout.strip()
 
 
+def get_diff_stats(repo_path: str, branch: str) -> tuple[int, int]:
+    """Return (insertions, deletions) comparing branch to the default branch."""
+    default_branch = get_default_branch(repo_path)
+    result = subprocess.run(
+        ["git", "-C", repo_path, "diff", f"{default_branch}...{branch}", "--shortstat"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return (0, 0)
+
+    text = result.stdout.strip()
+    insertions = 0
+    deletions = 0
+    # Parse "N files changed, X insertions(+), Y deletions(-)"
+    match = re.search(r"(\d+) insertion", text)
+    if match:
+        insertions = int(match.group(1))
+    match = re.search(r"(\d+) deletion", text)
+    if match:
+        deletions = int(match.group(1))
+    return (insertions, deletions)
+
+
+def has_uncommitted_changes(worktree_path: str) -> bool:
+    """Check if a worktree has uncommitted changes (dirty working tree)."""
+    result = subprocess.run(
+        ["git", "-C", worktree_path, "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout.strip())
+
+
 def merge_branch(repo_path: str, branch: str) -> str:
     """Merge a branch into the default branch from the main repo.
 

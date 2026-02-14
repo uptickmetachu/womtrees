@@ -32,7 +32,8 @@ from womtrees.tui.dialogs import (
     MergeDialog,
     RebaseDialog,
 )
-from womtrees.worktree import get_current_repo
+from womtrees.models import GitStats
+from womtrees.worktree import get_current_repo, get_diff_stats, has_uncommitted_changes
 
 
 class WomtreesApp(App):
@@ -134,8 +135,23 @@ class WomtreesApp(App):
         finally:
             conn.close()
 
+        # Compute git stats for review items
+        git_stats: dict[int, GitStats] = {}
+        for item in items:
+            if item.status == "review" and item.worktree_path:
+                try:
+                    insertions, deletions = get_diff_stats(item.repo_path, item.branch)
+                    uncommitted = has_uncommitted_changes(item.worktree_path)
+                    git_stats[item.id] = GitStats(
+                        uncommitted=uncommitted,
+                        insertions=insertions,
+                        deletions=deletions,
+                    )
+                except Exception:
+                    pass
+
         board = self.query_one("#board", KanbanBoard)
-        board.refresh_data(items, sessions, self.group_by_repo, pull_requests)
+        board.refresh_data(items, sessions, self.group_by_repo, pull_requests, git_stats=git_stats)
 
         self._update_status_bar(items, sessions)
 
