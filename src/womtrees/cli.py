@@ -165,16 +165,10 @@ def _start_work_item(conn, item_id: int, config) -> None:
 
 
 @cli.command("list")
-@click.option("--all", "show_all", is_flag=True, help="Show all repos.")
-def list_cmd(show_all: bool) -> None:
+def list_cmd() -> None:
     """List work items with Claude session info."""
-    repo = get_current_repo()
     conn = get_connection()
-
-    if show_all or repo is None:
-        items = list_work_items(conn)
-    else:
-        items = list_work_items(conn, repo_name=repo[0])
+    items = list_work_items(conn)
 
     if not items:
         conn.close()
@@ -210,8 +204,7 @@ def list_cmd(show_all: bool) -> None:
 
 @cli.command()
 @click.argument("item_id", type=int, required=False)
-@click.option("--all", "show_all", is_flag=True, help="Show all repos.")
-def status(item_id: int | None, show_all: bool) -> None:
+def status(item_id: int | None) -> None:
     """Show status of work items."""
     conn = get_connection()
 
@@ -239,11 +232,7 @@ def status(item_id: int | None, show_all: bool) -> None:
                 click.echo(f"    C{s.id}: {s.state} (pane {s.tmux_pane})")
         return
 
-    repo = get_current_repo()
-    if show_all or repo is None:
-        items = list_work_items(conn)
-    else:
-        items = list_work_items(conn, repo_name=repo[0])
+    items = list_work_items(conn)
 
     conn.close()
 
@@ -401,11 +390,10 @@ def done(item_id: int) -> None:
 
 
 @cli.command()
-@click.option("--all", "show_all", is_flag=True, help="Show all repos.")
-def board(show_all: bool) -> None:
+def board() -> None:
     """Open the kanban board TUI."""
     from womtrees.tui.app import WomtreesApp
-    app = WomtreesApp(show_all=show_all)
+    app = WomtreesApp()
     app.run()
 
 
@@ -433,18 +421,12 @@ def config(edit: bool) -> None:
 
 
 @cli.command("sessions")
-@click.option("--all", "show_all", is_flag=True, help="Show all repos.")
-def sessions_cmd(show_all: bool) -> None:
+def sessions_cmd() -> None:
     """List all Claude sessions."""
     from womtrees.claude import is_pid_alive
 
-    repo = get_current_repo()
     conn = get_connection()
-
-    if show_all or repo is None:
-        sessions = list_claude_sessions(conn)
-    else:
-        sessions = list_claude_sessions(conn, repo_name=repo[0])
+    sessions = list_claude_sessions(conn)
 
     # Clean up stale sessions
     for s in sessions:
