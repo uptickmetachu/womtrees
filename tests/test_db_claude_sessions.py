@@ -144,7 +144,7 @@ def test_find_session():
     assert not_found is None
 
 
-def test_find_session_ignores_done():
+def test_find_session_includes_done():
     conn = _in_memory_conn()
     create_claude_session(
         conn, "myrepo", "/tmp/myrepo", "feat/auth",
@@ -152,4 +152,5 @@ def test_find_session_ignores_done():
     )
 
     found = find_claude_session(conn, "s1", "%1")
-    assert found is None
+    assert found is not None
+    assert found.state == "done"

@@ -63,7 +63,6 @@ class WomtreesApp(App):
         Binding("c", "create_item", "Create", show=True),
         Binding("t", "todo_item", "Todo", show=True),
         Binding("r", "review_item", "Review", show=True),
-        Binding("shift+d", "done_item", "Done", show=True),
         Binding("d", "delete_item", "Delete", show=True),
         Binding("g", "toggle_grouping", "Group", show=True),
         Binding("a", "toggle_all", "All", show=True),
@@ -81,7 +80,7 @@ class WomtreesApp(App):
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
             yield Static(
-                "[s]tart [d]elete [r]eview [D]one [Enter]jump [g]roup [a]ll [?]help [q]uit",
+                "[s]tart [d]elete [r]eview [Enter]jump [g]roup [a]ll [?]help [q]uit",
                 id="status-keys",
             )
             yield Static("", id="status-counts")
@@ -230,7 +229,7 @@ class WomtreesApp(App):
         board = self._get_board()
         statuses = list(board.columns.keys())
         idx = self.active_column_idx + direction
-        while 0 <= idx <= 4:
+        while 0 <= idx < len(statuses):
             cards = board.columns[statuses[idx]].get_focusable_cards()
             if cards:
                 self.active_column_idx = idx
@@ -368,20 +367,6 @@ class WomtreesApp(App):
         update_work_item(conn, card.work_item.id, status="review")
         conn.close()
         self.notify(f"#{card.work_item.id} moved to review")
-        self._refresh_board()
-
-    def action_done_item(self) -> None:
-        card = self._get_focused_card()
-        if not isinstance(card, WorkItemCard):
-            return
-        if card.work_item.status not in ("working", "input", "review"):
-            self.notify("Can only mark active items as done", severity="warning")
-            return
-
-        conn = get_connection()
-        update_work_item(conn, card.work_item.id, status="done")
-        conn.close()
-        self.notify(f"#{card.work_item.id} marked as done")
         self._refresh_board()
 
     def action_delete_item(self) -> None:
