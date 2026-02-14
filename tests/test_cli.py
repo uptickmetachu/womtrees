@@ -441,3 +441,66 @@ def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path):
 
         # Should NOT have sent any resume command
         mock_send_keys.assert_not_called()
+
+
+def test_todo_with_repo_option(runner, db_conn, tmp_path):
+    """Test that -r option overrides current repo detection."""
+    get_conn_fn, db_path = db_conn
+    target_repo = tmp_path / "other-project"
+    target_repo.mkdir()
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+        result = runner.invoke(cli, ["todo", "-b", "feat/x", "-r", str(target_repo)])
+        assert result.exit_code == 0
+        assert "Created TODO #1" in result.output
+
+        # Verify the item was created with the specified repo
+        conn = get_conn_fn()
+        from womtrees.db import get_work_item
+        item = get_work_item(conn, 1)
+        assert item.repo_name == "other-project"
+        assert item.repo_path == str(target_repo)
+
+
+def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
+    """Test that -r works even when not in a git repo."""
+    get_conn_fn, db_path = db_conn
+    target_repo = tmp_path / "standalone"
+    target_repo.mkdir()
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.cli.get_current_repo", return_value=None):
+        result = runner.invoke(cli, ["todo", "-b", "feat/y", "-r", str(target_repo)])
+        assert result.exit_code == 0
+        assert "Created TODO #1" in result.output
+
+
+def test_create_with_repo_option(runner, db_conn, tmp_path):
+    """Test that create command also accepts -r option."""
+    get_conn_fn, db_path = db_conn
+    target_repo = tmp_path / "another-project"
+    target_repo.mkdir()
+
+    mock_config = MagicMock()
+    mock_config.base_dir = tmp_path / "worktrees"
+    mock_config.tmux_split = "vertical"
+    mock_config.tmux_claude_pane = "right"
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
+         patch("womtrees.cli.get_config", return_value=mock_config), \
+         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "another-project" / "feat-z"), \
+         patch("womtrees.tmux.is_available", return_value=True), \
+         patch("womtrees.tmux.create_session", return_value=("another-project/feat-z", "%0")), \
+         patch("womtrees.tmux.set_environment"), \
+         patch("womtrees.tmux.split_pane", return_value="%1"), \
+         patch("womtrees.tmux.send_keys"):
+        result = runner.invoke(cli, ["create", "-b", "feat/z", "-r", str(target_repo)])
+        assert result.exit_code == 0
+
+        conn = get_conn_fn()
+        from womtrees.db import get_work_item
+        item = get_work_item(conn, 1)
+        assert item.repo_name == "another-project"
+        assert item.repo_path == str(target_repo)

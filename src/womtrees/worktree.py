@@ -105,6 +105,57 @@ def _run_womtrees_setup(config: dict, repo_path: str, worktree_path: Path) -> No
         )
 
 
+def get_default_branch(repo_path: str) -> str:
+    """Return the default branch name (main or master) for a repo."""
+    result = subprocess.run(
+        ["git", "-C", repo_path, "symbolic-ref", "refs/remotes/origin/HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        # refs/remotes/origin/main -> main
+        return result.stdout.strip().rsplit("/", 1)[-1]
+
+    # Fallback: check if main or master exists
+    for branch in ("main", "master"):
+        result = subprocess.run(
+            ["git", "-C", repo_path, "rev-parse", "--verify", branch],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return branch
+
+    return "main"
+
+
+def merge_branch(repo_path: str, branch: str) -> str:
+    """Merge a branch into the default branch from the main repo.
+
+    Returns the merge output message.
+    Raises subprocess.CalledProcessError on conflict or failure.
+    """
+    default_branch = get_default_branch(repo_path)
+
+    # Checkout default branch in the main repo
+    subprocess.run(
+        ["git", "-C", repo_path, "checkout", default_branch],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    # Merge the feature branch
+    result = subprocess.run(
+        ["git", "-C", repo_path, "merge", "--no-ff", branch],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout.strip()
+
+
 def remove_worktree(worktree_path: str | Path, repo_path: str | Path | None = None) -> None:
     """Remove a git worktree and prune."""
     worktree_path = Path(worktree_path)
