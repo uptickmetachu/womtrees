@@ -11,6 +11,17 @@ CLAUDE_SETTINGS_FILE = CLAUDE_SETTINGS_DIR / "settings.json"
 
 WOMTREE_HOOKS = {
     "hooks": {
+        "UserPromptSubmit": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "wt hook heartbeat",
+                    }
+                ],
+            }
+        ],
         "PostToolUse": [
             {
                 "matcher": "",
