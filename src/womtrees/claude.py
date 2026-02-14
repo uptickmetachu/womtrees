@@ -90,6 +90,61 @@ def _is_wt_hook_entry(entry: dict) -> bool:
     return False
 
 
+TMUX_CONF = Path.home() / ".tmux.conf"
+TMUX_STATUS_MARKER = "wt status --tmux"
+
+
+def configure_tmux_status_bar() -> bool:
+    """Add wt status to tmux status-right in ~/.tmux.conf.
+
+    Returns True if changes were made, False if already configured.
+    """
+    if TMUX_CONF.exists():
+        content = TMUX_CONF.read_text()
+    else:
+        content = ""
+
+    if TMUX_STATUS_MARKER in content:
+        return False
+
+    lines_to_add = [
+        "",
+        "# womtrees status bar",
+        'set -g status-right "#(wt status --tmux) | %H:%M"',
+        "set -g status-interval 5",
+    ]
+
+    # If there's an existing status-right, comment it out
+    new_lines = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("set") and "status-right" in stripped and not stripped.startswith("#"):
+            new_lines.append(f"# {line}  # replaced by womtrees")
+        elif stripped.startswith("set") and "status-interval" in stripped and not stripped.startswith("#"):
+            new_lines.append(f"# {line}  # replaced by womtrees")
+        else:
+            new_lines.append(line)
+
+    new_content = "\n".join(new_lines)
+    if not new_content.endswith("\n"):
+        new_content += "\n"
+    new_content += "\n".join(lines_to_add) + "\n"
+
+    TMUX_CONF.write_text(new_content)
+
+    # Reload tmux config if tmux is running
+    try:
+        subprocess.run(
+            ["tmux", "source-file", str(TMUX_CONF)],
+            capture_output=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        pass
+
+    return True
+
+
 def install_global_hooks() -> None:
     """Install womtrees hooks into Claude Code's global settings.
 
