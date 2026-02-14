@@ -4,21 +4,6 @@ import json
 import subprocess
 
 
-def create_pr(worktree_path: str, prompt: str, claude_args: str = "") -> str:
-    """Run `claude -p "<prompt>"` in the worktree directory and return stdout."""
-    cmd = ["claude", "-p", prompt]
-    if claude_args:
-        cmd.extend(claude_args.split())
-    result = subprocess.run(
-        cmd,
-        cwd=worktree_path,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    return result.stdout
-
-
 def detect_pr(repo_path: str, branch: str) -> dict | None:
     """Detect an open PR for the given branch using `gh pr list`.
 
