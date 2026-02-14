@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import sys
+
 import click
+
+# Restore the default excepthook so Rich (installed by Textual) doesn't
+# hijack tracebacks with fancy formatting that breaks CI and log parsing.
+sys.excepthook = sys.__excepthook__
 
 from womtrees.cli.admin import board, config, sqlite_cmd
 from womtrees.cli.hooks import hook
