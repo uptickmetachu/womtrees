@@ -23,6 +23,10 @@ claude_pane = "left"
 # Extra args passed to `claude` when launching in a worktree pane.
 # e.g. "--dangerously-skip-permissions" to skip the trust-folder prompt.
 # args = "--dangerously-skip-permissions"
+
+# [pull_requests]
+# Prompt passed to `claude -p` when creating a PR from the TUI.
+# prompt = "/pr"
 """
 
 
@@ -33,6 +37,7 @@ class Config:
     tmux_claude_pane: str  # left | right | top | bottom
     claude_args: str  # extra CLI args for claude
     branch_prefix: str  # prefix for auto-generated branch names
+    pr_prompt: str  # prompt passed to `claude -p` for PR creation
 
     @classmethod
     def load(cls) -> Config:
@@ -54,12 +59,16 @@ class Config:
 
         branch_prefix = worktrees.get("branch_prefix", "np-01")
 
+        pr_section = data.get("pull_requests", {})
+        pr_prompt = pr_section.get("prompt", "/pr")
+
         return cls(
             base_dir=base_dir,
             tmux_split=tmux_split,
             tmux_claude_pane=tmux_claude_pane,
             claude_args=claude_args,
             branch_prefix=branch_prefix,
+            pr_prompt=pr_prompt,
         )
 
 

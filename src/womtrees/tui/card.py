@@ -7,7 +7,7 @@ from textual.reactive import reactive
 from textual.app import ComposeResult
 from textual.widgets import Static
 
-from womtrees.models import ClaudeSession, WorkItem
+from womtrees.models import ClaudeSession, PullRequest, WorkItem
 
 
 def _time_ago(iso_str: str) -> str:
@@ -67,17 +67,31 @@ class WorkItemCard(Widget, can_focus=True):
     WorkItemCard .session-done {
         color: $text-muted;
     }
+
+    WorkItemCard .pr-open {
+        color: $success;
+    }
+
+    WorkItemCard .pr-closed {
+        color: $error;
+    }
+
+    WorkItemCard .pr-merged {
+        color: $accent;
+    }
     """
 
     def __init__(
         self,
         work_item: WorkItem,
         sessions: list[ClaudeSession] | None = None,
+        pull_requests: list[PullRequest] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.work_item = work_item
         self.sessions = sessions or []
+        self.pull_requests = pull_requests or []
 
     def compose(self) -> ComposeResult:
         yield Static(self._render_title(), classes="card-title")
@@ -90,11 +104,18 @@ class WorkItemCard(Widget, can_focus=True):
             age = _time_ago(session.updated_at)
             cls = f"session-{session.state}"
             indicator = " *" if session.state == "waiting" else ""
-            yield Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
+            yield Static(
+                f"C{session.id}: {session.state}{indicator} {age}", classes=cls
+            )
+        for pr in self.pull_requests:
+            cls = f"pr-{pr.status}"
+            yield Static(f"PR #{pr.number} {pr.status}", classes=cls)
 
     def _render_title(self) -> str:
         if self.work_item.name:
-            return f"#{self.work_item.id} {self.work_item.name} ({self.work_item.branch})"
+            return (
+                f"#{self.work_item.id} {self.work_item.name} ({self.work_item.branch})"
+            )
         return f"#{self.work_item.id} {self.work_item.branch}"
 
 
@@ -143,4 +164,6 @@ class UnmanagedCard(Widget, can_focus=True):
             age = _time_ago(session.updated_at)
             cls = f"session-{session.state}"
             indicator = " *" if session.state == "waiting" else ""
-            yield Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
+            yield Static(
+                f"C{session.id}: {session.state}{indicator} {age}", classes=cls
+            )

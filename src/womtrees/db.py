@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from womtrees.config import get_config
-from womtrees.models import ClaudeSession, WorkItem
+from womtrees.models import ClaudeSession, PullRequest, WorkItem
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -49,12 +49,25 @@ CREATE TABLE IF NOT EXISTS claude_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item ON claude_sessions(work_item_id);
 CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state);
+
+CREATE TABLE IF NOT EXISTS pull_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_item_id INTEGER NOT NULL REFERENCES work_items(id),
+    number INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    owner TEXT NOT NULL,
+    repo TEXT NOT NULL,
+    url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pull_requests_work_item ON pull_requests(work_item_id);
 """
 
 MIGRATIONS = {
     2: ["ALTER TABLE work_items ADD COLUMN tmux_session TEXT"],
     3: [
-
         """CREATE TABLE IF NOT EXISTS claude_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             work_item_id INTEGER REFERENCES work_items(id),
@@ -74,6 +87,20 @@ MIGRATIONS = {
     ],
     4: ["ALTER TABLE claude_sessions ADD COLUMN claude_session_id TEXT"],
     5: ["ALTER TABLE work_items ADD COLUMN name TEXT"],
+    6: [
+        """CREATE TABLE IF NOT EXISTS pull_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_item_id INTEGER NOT NULL REFERENCES work_items(id),
+            number INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            owner TEXT NOT NULL,
+            repo TEXT NOT NULL,
+            url TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_pull_requests_work_item ON pull_requests(work_item_id)",
+    ],
 }
 
 
@@ -92,6 +119,20 @@ def _row_to_work_item(row: sqlite3.Row) -> WorkItem:
         worktree_path=row["worktree_path"],
         tmux_session=row["tmux_session"],
         status=row["status"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_pull_request(row: sqlite3.Row) -> PullRequest:
+    return PullRequest(
+        id=row["id"],
+        work_item_id=row["work_item_id"],
+        number=row["number"],
+        status=row["status"],
+        owner=row["owner"],
+        repo=row["repo"],
+        url=row["url"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -134,7 +175,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     cursor = conn.execute("SELECT version FROM schema_version")
     row = cursor.fetchone()
     if row is None:
-        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+        conn.execute(
+            "INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
+        )
         conn.commit()
     else:
         current = row["version"]
@@ -211,7 +254,9 @@ def list_work_items(
     return [_row_to_work_item(row) for row in cursor.fetchall()]
 
 
-def update_work_item(conn: sqlite3.Connection, item_id: int, **fields) -> WorkItem | None:
+def update_work_item(
+    conn: sqlite3.Connection, item_id: int, **fields
+) -> WorkItem | None:
     if not fields:
         return get_work_item(conn, item_id)
 
@@ -252,13 +297,28 @@ def create_claude_session(
         """INSERT INTO claude_sessions
            (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, claude_session_id, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, claude_session_id, now, now),
+        (
+            work_item_id,
+            repo_name,
+            repo_path,
+            branch,
+            tmux_session,
+            tmux_pane,
+            pid,
+            state,
+            prompt,
+            claude_session_id,
+            now,
+            now,
+        ),
     )
     conn.commit()
     return get_claude_session(conn, cursor.lastrowid)
 
 
-def get_claude_session(conn: sqlite3.Connection, session_id: int) -> ClaudeSession | None:
+def get_claude_session(
+    conn: sqlite3.Connection, session_id: int
+) -> ClaudeSession | None:
     cursor = conn.execute("SELECT * FROM claude_sessions WHERE id = ?", (session_id,))
     row = cursor.fetchone()
     if row is None:
@@ -292,7 +352,9 @@ def list_claude_sessions(
     return [_row_to_claude_session(row) for row in cursor.fetchall()]
 
 
-def update_claude_session(conn: sqlite3.Connection, session_id: int, **fields) -> ClaudeSession | None:
+def update_claude_session(
+    conn: sqlite3.Connection, session_id: int, **fields
+) -> ClaudeSession | None:
     if not fields:
         return get_claude_session(conn, session_id)
 
@@ -333,3 +395,64 @@ def find_claude_session(
     if row is None:
         return None
     return _row_to_claude_session(row)
+
+
+# -- PullRequest CRUD --
+
+
+def create_pull_request(
+    conn: sqlite3.Connection,
+    work_item_id: int,
+    number: int,
+    owner: str,
+    repo: str,
+    status: str = "open",
+    url: str | None = None,
+) -> PullRequest:
+    now = _now()
+    cursor = conn.execute(
+        """INSERT INTO pull_requests
+           (work_item_id, number, status, owner, repo, url, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (work_item_id, number, status, owner, repo, url, now, now),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT * FROM pull_requests WHERE id = ?", (cursor.lastrowid,)
+    ).fetchone()
+    return _row_to_pull_request(row)
+
+
+def list_pull_requests(
+    conn: sqlite3.Connection,
+    work_item_id: int | None = None,
+) -> list[PullRequest]:
+    query = "SELECT * FROM pull_requests WHERE 1=1"
+    params: list[int] = []
+
+    if work_item_id is not None:
+        query += " AND work_item_id = ?"
+        params.append(work_item_id)
+
+    query += " ORDER BY id"
+    cursor = conn.execute(query, params)
+    return [_row_to_pull_request(row) for row in cursor.fetchall()]
+
+
+def update_pull_request(
+    conn: sqlite3.Connection, pr_id: int, **fields: object
+) -> PullRequest | None:
+    if not fields:
+        row = conn.execute(
+            "SELECT * FROM pull_requests WHERE id = ?", (pr_id,)
+        ).fetchone()
+        return _row_to_pull_request(row) if row else None
+
+    fields["updated_at"] = _now()
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [pr_id]
+
+    conn.execute(f"UPDATE pull_requests SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    row = conn.execute("SELECT * FROM pull_requests WHERE id = ?", (pr_id,)).fetchone()
+    return _row_to_pull_request(row) if row else None
