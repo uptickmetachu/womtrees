@@ -303,7 +303,7 @@ def find_claude_session(
 ) -> ClaudeSession | None:
     """Find a Claude session by tmux session and pane."""
     cursor = conn.execute(
-        "SELECT * FROM claude_sessions WHERE tmux_session = ? AND tmux_pane = ? AND state != 'done' ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM claude_sessions WHERE tmux_session = ? AND tmux_pane = ? ORDER BY id DESC LIMIT 1",
         (tmux_session, tmux_pane),
     )
     row = cursor.fetchone()
