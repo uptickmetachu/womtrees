@@ -19,6 +19,19 @@ class WorkItem:
 
 
 @dataclass
+class PullRequest:
+    id: int
+    work_item_id: int
+    number: int
+    status: str  # open, closed, merged
+    owner: str
+    repo: str
+    url: str | None
+    created_at: str
+    updated_at: str
+
+
+@dataclass
 class ClaudeSession:
     id: int
     work_item_id: int | None

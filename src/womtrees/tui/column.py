@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
-from womtrees.models import ClaudeSession, WorkItem
+from womtrees.models import ClaudeSession, PullRequest, WorkItem
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 
 
@@ -52,7 +52,11 @@ class KanbanColumn(VerticalScroll):
         self.cards: list[WorkItemCard | UnmanagedCard] = []
 
     def compose(self) -> ComposeResult:
-        yield Static(f"{self.status.upper()} (0)", classes="column-header", id=f"header-{self.status}")
+        yield Static(
+            f"{self.status.upper()} (0)",
+            classes="column-header",
+            id=f"header-{self.status}",
+        )
 
     def update_cards(
         self,
@@ -60,6 +64,7 @@ class KanbanColumn(VerticalScroll):
         sessions_by_item: dict[int | None, list[ClaudeSession]],
         unmanaged_sessions: list[ClaudeSession],
         group_by_repo: bool,
+        prs_by_item: dict[int, list[PullRequest]] | None = None,
     ) -> None:
         """Rebuild the column's cards from fresh data."""
         # Remove old cards
@@ -79,15 +84,18 @@ class KanbanColumn(VerticalScroll):
             return
 
         if group_by_repo:
-            self._mount_grouped(items, sessions_by_item, unmanaged_sessions)
+            self._mount_grouped(
+                items, sessions_by_item, unmanaged_sessions, prs_by_item
+            )
         else:
-            self._mount_flat(items, sessions_by_item, unmanaged_sessions)
+            self._mount_flat(items, sessions_by_item, unmanaged_sessions, prs_by_item)
 
     def _mount_grouped(
         self,
         items: list[WorkItem],
         sessions_by_item: dict[int | None, list[ClaudeSession]],
         unmanaged_sessions: list[ClaudeSession],
+        prs_by_item: dict[int, list[PullRequest]] | None = None,
     ) -> None:
         # Group items by repo
         by_repo: dict[str, list[WorkItem]] = {}
@@ -108,7 +116,8 @@ class KanbanColumn(VerticalScroll):
 
             for item in by_repo.get(repo, []):
                 sessions = sessions_by_item.get(item.id, [])
-                card = WorkItemCard(item, sessions)
+                item_prs = (prs_by_item or {}).get(item.id, [])
+                card = WorkItemCard(item, sessions, item_prs)
                 self.mount(card)
                 self.cards.append(card)
 
@@ -129,10 +138,12 @@ class KanbanColumn(VerticalScroll):
         items: list[WorkItem],
         sessions_by_item: dict[int | None, list[ClaudeSession]],
         unmanaged_sessions: list[ClaudeSession],
+        prs_by_item: dict[int, list[PullRequest]] | None = None,
     ) -> None:
         for item in items:
             sessions = sessions_by_item.get(item.id, [])
-            card = WorkItemCard(item, sessions)
+            item_prs = (prs_by_item or {}).get(item.id, [])
+            card = WorkItemCard(item, sessions, item_prs)
             self.mount(card)
             self.cards.append(card)
 

@@ -6,14 +6,17 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widgets import Footer, Header, Static
+from textual import work
 
 from womtrees.config import get_config
 from womtrees.db import (
+    create_pull_request,
     create_work_item,
     delete_work_item,
     get_connection,
     get_work_item,
     list_claude_sessions,
+    list_pull_requests,
     list_repos,
     list_work_items,
     update_work_item,
@@ -73,6 +76,7 @@ class WomtreesApp(App):
         Binding("r", "review_item", "Review", show=True),
         Binding("m", "merge_item", "Merge", show=True),
         Binding("d", "delete_item", "Delete", show=True),
+        Binding("p", "create_pr", "PR", show=True),
         Binding("g", "toggle_grouping", "Group", show=True),
     ]
 
@@ -87,7 +91,7 @@ class WomtreesApp(App):
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
             yield Static(
-                "[s]tart [r]eview [m]erge [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
+                "[s]tart [r]eview [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
                 id="status-keys",
             )
             yield Static("", id="status-counts")
@@ -126,11 +130,12 @@ class WomtreesApp(App):
         try:
             items = list_work_items(conn)
             sessions = list_claude_sessions(conn)
+            pull_requests = list_pull_requests(conn)
         finally:
             conn.close()
 
         board = self.query_one("#board", KanbanBoard)
-        board.refresh_data(items, sessions, self.group_by_repo)
+        board.refresh_data(items, sessions, self.group_by_repo, pull_requests)
 
         self._update_status_bar(items, sessions)
 
@@ -626,6 +631,68 @@ class WomtreesApp(App):
         conn.close()
         self.notify(f"Deleted #{item_id}")
         self._refresh_board()
+
+    # -- PR actions --
+
+    def action_create_pr(self) -> None:
+        """Create a GitHub PR for the focused work item using Claude."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+        if card.work_item.status not in ("working", "input", "review"):
+            self.notify(
+                "Can only create PR for working/input/review items", severity="warning"
+            )
+            return
+        if not card.work_item.worktree_path:
+            self.notify("No worktree path for this item", severity="warning")
+            return
+
+        item = card.work_item
+        self.notify(f"Creating PR for #{item.id}...")
+        self._run_create_pr(item.id, item.worktree_path, item.branch, item.repo_path)
+
+    @work(thread=True)
+    def _run_create_pr(
+        self, item_id: int, worktree_path: str, branch: str, repo_path: str
+    ) -> None:
+        from womtrees.github import create_pr, detect_pr
+
+        config = get_config()
+        try:
+            create_pr(worktree_path, config.pr_prompt, config.claude_args)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.notify, f"Claude PR failed: {e}", severity="error"
+            )
+            return
+
+        pr_info = detect_pr(repo_path, branch)
+        if pr_info is None:
+            self.app.call_from_thread(
+                self.notify,
+                "PR created but could not detect it via gh",
+                severity="warning",
+            )
+            return
+
+        conn = get_connection()
+        try:
+            create_pull_request(
+                conn,
+                work_item_id=item_id,
+                number=pr_info["number"],
+                owner=pr_info["owner"],
+                repo=pr_info["repo"],
+                status=pr_info["state"],
+                url=pr_info["url"],
+            )
+        finally:
+            conn.close()
+
+        url = pr_info.get("url", f"PR #{pr_info['number']}")
+        self.app.call_from_thread(self.notify, f"PR created: {url}")
+        self.app.call_from_thread(self._refresh_board)
 
     # -- Toggle actions --
 
