@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from womtrees.db import (
     _ensure_schema,
     create_work_item,
@@ -97,3 +99,27 @@ def test_delete():
 def test_delete_nonexistent():
     conn = _in_memory_conn()
     assert delete_work_item(conn, 999) is False
+
+
+def test_duplicate_branch_raises():
+    conn = _in_memory_conn()
+    create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
+    with pytest.raises(ValueError, match="already has an active work item"):
+        create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
+
+
+def test_duplicate_branch_allowed_after_done():
+    conn = _in_memory_conn()
+    item = create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
+    update_work_item(conn, item.id, status="done")
+    # Should succeed — previous item is done
+    item2 = create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
+    assert item2.id != item.id
+
+
+def test_duplicate_branch_allowed_different_repo():
+    conn = _in_memory_conn()
+    create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
+    # Same branch in a different repo is fine
+    item2 = create_work_item(conn, "repo2", "/tmp/repo2", "feat/dup")
+    assert item2.branch == "feat/dup"

@@ -38,7 +38,11 @@ def todo(branch: str, prompt: str | None, name: str | None) -> None:
 
     repo_name, repo_path = repo
     conn = get_connection()
-    item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
+    try:
+        item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
+    except ValueError as e:
+        conn.close()
+        raise click.ClickException(str(e))
     conn.close()
     click.echo(f"Created TODO #{item.id}: {branch}")
 
@@ -57,7 +61,11 @@ def create(branch: str, prompt: str | None, name: str | None) -> None:
     config = get_config()
     conn = get_connection()
 
-    item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
+    try:
+        item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
+    except ValueError as e:
+        conn.close()
+        raise click.ClickException(str(e))
     _start_work_item(conn, item.id, config)
     conn.close()
 

@@ -161,6 +161,17 @@ def create_work_item(
     status: str = "todo",
     name: str | None = None,
 ) -> WorkItem:
+    # Guard against duplicate active branches in the same repo
+    cursor = conn.execute(
+        "SELECT id FROM work_items WHERE repo_name = ? AND branch = ? AND status != 'done'",
+        (repo_name, branch),
+    )
+    existing = cursor.fetchone()
+    if existing:
+        raise ValueError(
+            f"Branch '{branch}' already has an active work item (#{existing['id']})"
+        )
+
     now = _now()
     cursor = conn.execute(
         """INSERT INTO work_items (repo_name, repo_path, branch, name, prompt, status, created_at, updated_at)
