@@ -196,40 +196,47 @@ class WomtreesApp(App):
     # -- Navigation actions --
 
     def action_prev_column(self) -> None:
-        if self.active_column_idx > 0:
-            self.active_column_idx -= 1
-            self._focus_first_card_in_column()
+        self._jump_to_next_column(direction=-1, focus="first")
 
     def action_next_column(self) -> None:
-        if self.active_column_idx < 4:
-            self.active_column_idx += 1
-            self._focus_first_card_in_column()
+        self._jump_to_next_column(direction=1, focus="first")
 
     def action_next_card(self) -> None:
         col = self._get_active_column()
         cards = col.get_focusable_cards()
-        if not cards:
-            return
         focused = self._get_focused_card()
-        if focused in cards:
+        if cards and focused in cards:
             idx = cards.index(focused)
             if idx < len(cards) - 1:
                 cards[idx + 1].focus()
-        else:
-            cards[0].focus()
+                return
+        # At end of column or empty — jump to next column with cards
+        self._jump_to_next_column(direction=1, focus="first")
 
     def action_prev_card(self) -> None:
         col = self._get_active_column()
         cards = col.get_focusable_cards()
-        if not cards:
-            return
         focused = self._get_focused_card()
-        if focused in cards:
+        if cards and focused in cards:
             idx = cards.index(focused)
             if idx > 0:
                 cards[idx - 1].focus()
-        else:
-            cards[-1].focus()
+                return
+        # At start of column or empty — jump to prev column with cards
+        self._jump_to_next_column(direction=-1, focus="last")
+
+    def _jump_to_next_column(self, direction: int, focus: str) -> None:
+        """Move to the next/prev column that has cards."""
+        board = self._get_board()
+        statuses = list(board.columns.keys())
+        idx = self.active_column_idx + direction
+        while 0 <= idx <= 4:
+            cards = board.columns[statuses[idx]].get_focusable_cards()
+            if cards:
+                self.active_column_idx = idx
+                (cards[0] if focus == "first" else cards[-1]).focus()
+                return
+            idx += direction
 
     def _focus_first_card_in_column(self) -> None:
         col = self._get_active_column()
