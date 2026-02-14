@@ -21,7 +21,14 @@ from womtrees.db import (
 from womtrees.tui.board import KanbanBoard
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 from womtrees.tui.column import KanbanColumn
-from womtrees.tui.dialogs import CreateDialog, DeleteDialog, HelpDialog, MergeDialog, RebaseDialog
+from womtrees.tui.dialogs import (
+    AutoRebaseDialog,
+    CreateDialog,
+    DeleteDialog,
+    HelpDialog,
+    MergeDialog,
+    RebaseDialog,
+)
 from womtrees.worktree import get_current_repo
 
 
@@ -145,10 +152,18 @@ class WomtreesApp(App):
         board = self._get_board()
         for col in board.columns.values():
             for card in col.get_focusable_cards():
-                if key[0] == "item" and isinstance(card, WorkItemCard) and card.work_item.id == key[1]:
+                if (
+                    key[0] == "item"
+                    and isinstance(card, WorkItemCard)
+                    and card.work_item.id == key[1]
+                ):
                     card.focus()
                     return
-                if key[0] == "unmanaged" and isinstance(card, UnmanagedCard) and card.branch == key[1]:
+                if (
+                    key[0] == "unmanaged"
+                    and isinstance(card, UnmanagedCard)
+                    and card.branch == key[1]
+                ):
                     card.focus()
                     return
 
@@ -286,9 +301,13 @@ class WomtreesApp(App):
         try:
             wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
             session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
-            session_name, shell_pane_id = tmux.create_session(session_name, str(wt_path))
+            session_name, shell_pane_id = tmux.create_session(
+                session_name, str(wt_path)
+            )
             tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item.id))
-            claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
+            claude_pane_id = tmux.split_pane(
+                session_name, config.tmux_split, str(wt_path)
+            )
             if config.tmux_claude_pane in ("left", "top"):
                 tmux.swap_pane(session_name)
 
@@ -301,15 +320,25 @@ class WomtreesApp(App):
             tmux.send_keys(claude_pane_id, claude_cmd)
 
             from womtrees.db import create_claude_session
+
             create_claude_session(
-                conn, item.repo_name, item.repo_path, item.branch,
+                conn,
+                item.repo_name,
+                item.repo_path,
+                item.branch,
                 tmux_session=session_name,
                 tmux_pane=claude_pane_id,
                 work_item_id=item.id,
                 prompt=item.prompt,
             )
 
-            update_work_item(conn, item.id, status="working", worktree_path=str(wt_path), tmux_session=session_name)
+            update_work_item(
+                conn,
+                item.id,
+                status="working",
+                worktree_path=str(wt_path),
+                tmux_session=session_name,
+            )
             self.notify(f"Started #{item.id}")
         except Exception as e:
             self.notify(f"Failed to start: {e}", severity="error")
@@ -347,7 +376,14 @@ class WomtreesApp(App):
         repo_path = result["repo_path"]
         conn = get_connection()
         try:
-            item = create_work_item(conn, repo_name, repo_path, result["branch"], result["prompt"], name=result.get("name"))
+            item = create_work_item(
+                conn,
+                repo_name,
+                repo_path,
+                result["branch"],
+                result["prompt"],
+                name=result.get("name"),
+            )
         except ValueError as e:
             conn.close()
             self.notify(str(e), severity="error")
@@ -357,10 +393,14 @@ class WomtreesApp(App):
             config = get_config()
             try:
                 from womtrees.cli import _start_work_item
+
                 _start_work_item(conn, item.id, config)
                 self.notify(f"Created and started #{item.id}")
             except Exception as e:
-                self.notify(f"Created TODO #{item.id}, but start failed: {e}", severity="warning")
+                self.notify(
+                    f"Created TODO #{item.id}, but start failed: {e}",
+                    severity="warning",
+                )
         else:
             self.notify(f"Created TODO #{item.id}")
 
@@ -463,7 +503,7 @@ class WomtreesApp(App):
         if not confirmed:
             return
 
-        from womtrees.worktree import rebase_branch
+        from womtrees.worktree import abort_rebase, rebase_branch
 
         conn = get_connection()
         item = get_work_item(conn, item_id)
@@ -473,13 +513,76 @@ class WomtreesApp(App):
 
         try:
             rebase_branch(item.repo_path, item.branch)
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
+            abort_rebase(item.repo_path)
             conn.close()
-            self.notify(f"Rebase failed: {e.stderr.strip()}", severity="error")
+            msg = (
+                f"Rebase of #{item_id} ({item.branch}) failed due to conflicts.\n"
+                f"Use claude -p to auto-rebase and resolve conflicts?"
+            )
+            self.push_screen(
+                AutoRebaseDialog(msg),
+                lambda confirmed: self._on_auto_rebase_confirmed(confirmed, item_id),
+            )
             return
 
         conn.close()
         self.notify(f"#{item_id} rebased — press [m] to merge")
+
+    def _on_auto_rebase_confirmed(self, confirmed: bool, item_id: int) -> None:
+        if not confirmed:
+            return
+
+        from womtrees.worktree import auto_rebase_branch, get_default_branch
+
+        conn = get_connection()
+        item = get_work_item(conn, item_id)
+        if item is None:
+            conn.close()
+            return
+
+        if not item.worktree_path:
+            conn.close()
+            self.notify("No worktree path — cannot auto-rebase", severity="error")
+            return
+
+        default_branch = get_default_branch(item.repo_path)
+        conn.close()
+
+        self.notify(f"#{item_id} auto-rebasing with claude -p...")
+
+        def run_auto_rebase() -> str:
+            return auto_rebase_branch(item.worktree_path, item.branch, default_branch)
+
+        self.run_worker(
+            run_auto_rebase,
+            name=f"auto-rebase-{item_id}",
+            exit_on_error=False,
+        )
+
+    def on_worker_state_changed(self, event: object) -> None:
+        """Handle worker completion for auto-rebase."""
+        from textual.worker import Worker
+
+        worker = getattr(event, "worker", None)
+        if not isinstance(worker, Worker):
+            return
+        if not worker.name or not worker.name.startswith("auto-rebase-"):
+            return
+        if not worker.is_finished:
+            return
+
+        item_id = worker.name.removeprefix("auto-rebase-")
+        if worker.error:
+            stderr = ""
+            if isinstance(worker.error, subprocess.CalledProcessError):
+                stderr = worker.error.stderr.strip()
+            self.notify(
+                f"#{item_id} auto-rebase failed: {stderr or worker.error}",
+                severity="error",
+            )
+        else:
+            self.notify(f"#{item_id} rebased — press [m] to merge")
 
     def action_delete_item(self) -> None:
         card = self._get_focused_card()
@@ -492,7 +595,10 @@ class WomtreesApp(App):
         else:
             msg = f"Delete #{item.id} ({item.branch}, status={item.status})?"
 
-        self.push_screen(DeleteDialog(msg), lambda confirmed: self._on_delete_confirmed(confirmed, item.id))
+        self.push_screen(
+            DeleteDialog(msg),
+            lambda confirmed: self._on_delete_confirmed(confirmed, item.id),
+        )
 
     def _on_delete_confirmed(self, confirmed: bool, item_id: int) -> None:
         if not confirmed:

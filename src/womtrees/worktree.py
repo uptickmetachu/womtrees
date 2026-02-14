@@ -135,9 +135,7 @@ class RebaseRequiredError(Exception):
     def __init__(self, branch: str, default_branch: str) -> None:
         self.branch = branch
         self.default_branch = default_branch
-        super().__init__(
-            f"Branch '{branch}' needs rebase onto '{default_branch}'"
-        )
+        super().__init__(f"Branch '{branch}' needs rebase onto '{default_branch}'")
 
 
 def needs_rebase(repo_path: str, branch: str) -> bool:
@@ -183,6 +181,40 @@ def rebase_branch(repo_path: str, branch: str) -> str:
     return result.stdout.strip()
 
 
+def abort_rebase(repo_path: str) -> None:
+    """Abort an in-progress rebase."""
+    subprocess.run(
+        ["git", "-C", repo_path, "rebase", "--abort"],
+        capture_output=True,
+        text=True,
+    )
+
+
+def auto_rebase_branch(worktree_path: str, branch: str, default_branch: str) -> str:
+    """Use claude -p to automatically rebase a branch, resolving conflicts.
+
+    Runs in the worktree directory so Claude has full access to the codebase.
+    Returns claude's output.
+    Raises subprocess.CalledProcessError on failure.
+    """
+    prompt = (
+        f"Rebase branch '{branch}' onto '{default_branch}'. "
+        f"Run `git rebase {default_branch}` and resolve any merge conflicts "
+        f"that arise. Continue the rebase until it completes successfully. "
+        f"Do not commit anything beyond what the rebase requires."
+    )
+
+    result = subprocess.run(
+        ["claude", "-p", prompt],
+        cwd=worktree_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout.strip()
+
+
 def merge_branch(repo_path: str, branch: str) -> str:
     """Merge a branch into the default branch from the main repo.
 
@@ -214,7 +246,9 @@ def merge_branch(repo_path: str, branch: str) -> str:
     return result.stdout.strip()
 
 
-def remove_worktree(worktree_path: str | Path, repo_path: str | Path | None = None) -> None:
+def remove_worktree(
+    worktree_path: str | Path, repo_path: str | Path | None = None
+) -> None:
     """Remove a git worktree and prune."""
     worktree_path = Path(worktree_path)
 
