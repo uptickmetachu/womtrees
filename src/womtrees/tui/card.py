@@ -7,7 +7,7 @@ from textual.reactive import reactive
 from textual.app import ComposeResult
 from textual.widgets import Static
 
-from womtrees.models import ClaudeSession, PullRequest, WorkItem
+from womtrees.models import ClaudeSession, GitStats, PullRequest, WorkItem
 
 
 def _time_ago(iso_str: str) -> str:
@@ -79,6 +79,18 @@ class WorkItemCard(Widget, can_focus=True):
     WorkItemCard .pr-merged {
         color: $accent;
     }
+
+    WorkItemCard .git-added {
+        color: $success;
+    }
+
+    WorkItemCard .git-removed {
+        color: $error;
+    }
+
+    WorkItemCard .git-dirty {
+        color: $warning;
+    }
     """
 
     def __init__(
@@ -86,15 +98,19 @@ class WorkItemCard(Widget, can_focus=True):
         work_item: WorkItem,
         sessions: list[ClaudeSession] | None = None,
         pull_requests: list[PullRequest] | None = None,
+        git_stats: GitStats | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.work_item = work_item
         self.sessions = sessions or []
         self.pull_requests = pull_requests or []
+        self.git_stats = git_stats
 
     def compose(self) -> ComposeResult:
         yield Static(self._render_title(), classes="card-title")
+        if self.git_stats:
+            yield Static(self._render_git_stats(), classes="git-stats")
         if self.work_item.prompt:
             prompt = self.work_item.prompt[:40]
             if len(self.work_item.prompt) > 40:
@@ -117,6 +133,17 @@ class WorkItemCard(Widget, can_focus=True):
                 f"#{self.work_item.id} {self.work_item.name} ({self.work_item.branch})"
             )
         return f"#{self.work_item.id} {self.work_item.branch}"
+
+    def _render_git_stats(self) -> str:
+        assert self.git_stats is not None
+        parts: list[str] = []
+        if self.git_stats.insertions or self.git_stats.deletions:
+            parts.append(
+                f"[green]+{self.git_stats.insertions}[/] [red]-{self.git_stats.deletions}[/]"
+            )
+        if self.git_stats.uncommitted:
+            parts.append("[yellow]\\[uncommitted][/]")
+        return " ".join(parts)
 
 
 class UnmanagedCard(Widget, can_focus=True):
