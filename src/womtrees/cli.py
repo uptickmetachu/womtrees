@@ -29,7 +29,8 @@ def cli() -> None:
 @cli.command()
 @click.option("-b", "--branch", required=True, help="Branch name for the worktree.")
 @click.option("-p", "--prompt", default=None, help="Task description / Claude prompt.")
-def todo(branch: str, prompt: str | None) -> None:
+@click.option("-n", "--name", default=None, help="Human-readable name for the work item.")
+def todo(branch: str, prompt: str | None, name: str | None) -> None:
     """Create a TODO work item (queued for later)."""
     repo = get_current_repo()
     if repo is None:
@@ -37,7 +38,7 @@ def todo(branch: str, prompt: str | None) -> None:
 
     repo_name, repo_path = repo
     conn = get_connection()
-    item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo")
+    item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
     conn.close()
     click.echo(f"Created TODO #{item.id}: {branch}")
 
@@ -45,7 +46,8 @@ def todo(branch: str, prompt: str | None) -> None:
 @cli.command()
 @click.option("-b", "--branch", required=True, help="Branch name for the worktree.")
 @click.option("-p", "--prompt", default=None, help="Task description / Claude prompt.")
-def create(branch: str, prompt: str | None) -> None:
+@click.option("-n", "--name", default=None, help="Human-readable name for the work item.")
+def create(branch: str, prompt: str | None, name: str | None) -> None:
     """Create a work item and immediately launch it."""
     repo = get_current_repo()
     if repo is None:
@@ -55,7 +57,7 @@ def create(branch: str, prompt: str | None) -> None:
     config = get_config()
     conn = get_connection()
 
-    item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo")
+    item = create_work_item(conn, repo_name, repo_path, branch, prompt, status="todo", name=name)
     _start_work_item(conn, item.id, config)
     conn.close()
 

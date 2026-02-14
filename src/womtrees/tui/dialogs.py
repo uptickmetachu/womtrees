@@ -49,6 +49,8 @@ class CreateDialog(ModalScreen[dict | None]):
         title = "Create & Launch" if self.mode == "create" else "Create TODO"
         with Vertical(id="dialog"):
             yield Label(f"[bold]{title}[/bold]")
+            yield Label("Name:")
+            yield Input(placeholder="Short description", id="name-input")
             yield Label("Branch:")
             yield Input(placeholder="feat/my-feature", id="branch-input")
             yield Label("Prompt:")
@@ -59,12 +61,14 @@ class CreateDialog(ModalScreen[dict | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
+            name_input = self.query_one("#name-input", Input)
             branch_input = self.query_one("#branch-input", Input)
             prompt_input = self.query_one("#prompt-input", TextArea)
+            name = name_input.value.strip() or None
             branch = branch_input.value.strip()
             prompt = prompt_input.text.strip() or None
             if branch:
-                self.dismiss({"branch": branch, "prompt": prompt, "mode": self.mode})
+                self.dismiss({"branch": branch, "prompt": prompt, "name": name, "mode": self.mode})
             else:
                 branch_input.focus()
         elif event.button.id == "cancel":
