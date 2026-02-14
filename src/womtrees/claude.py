@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -311,55 +311,17 @@ class ClaudeResultEvent:
 ClaudeEvent = ClaudeTextEvent | ClaudeToolEvent | ClaudeResultEvent
 
 
-class ClaudeCancelledError(Exception):
-    """Raised when a Claude session is cancelled."""
-
-
-@dataclass
-class ClaudeStreamSession:
-    """A running Claude streaming session with cancel support.
-
-    Iterate over ``events`` to receive typed events. Call ``cancel()``
-    to abort the session early.
-    """
-
-    events: AsyncGenerator[ClaudeEvent, None]
-    _cancelled: bool = field(default=False, init=False)
-    _client: Any = field(default=None, init=False)
-
-    async def cancel(self) -> None:
-        self._cancelled = True
-        if self._client is not None:
-            try:
-                await self._client.interrupt()
-            except Exception:
-                pass
-
-
-def start_claude_session(
+async def stream_claude_events(
     prompt: str,
     cwd: str,
     max_turns: int = 30,
-) -> ClaudeStreamSession:
-    """Start a streaming Claude session via the Agent SDK.
-
-    Returns a ``ClaudeStreamSession`` with an async event iterator and a
-    ``cancel()`` method.
-    """
-    session = ClaudeStreamSession(events=_stream_events(prompt, cwd, max_turns))
-    # The generator stores itself into session._client on first iteration.
-    session.events = _stream_events(prompt, cwd, max_turns, session=session)
-    return session
-
-
-async def _stream_events(
-    prompt: str,
-    cwd: str,
-    max_turns: int,
-    session: ClaudeStreamSession | None = None,
 ) -> AsyncGenerator[ClaudeEvent, None]:
-    """Internal async generator that drives the Agent SDK client."""
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    """Stream events from Claude using the stateless ``query()`` API.
+
+    Uses ``claude_agent_sdk.query`` which is a plain async generator — no
+    context-manager or cancel-scope issues with anyio/Textual workers.
+    """
+    from claude_agent_sdk import ClaudeAgentOptions, query
     from claude_agent_sdk.types import (
         AssistantMessage,
         ResultMessage,
@@ -373,62 +335,51 @@ async def _stream_events(
         max_turns=max_turns,
         cwd=cwd,
         include_partial_messages=True,
+        setting_sources=["user", "project"],
+        allowed_tools=["Skill", "Read", "Write", "Edit", "Bash", "Glob", "Grep"],
     )
 
-    async with ClaudeSDKClient(options=options) as client:
-        if session is not None:
-            session._client = client
+    yielded_text_len = 0
+    yielded_tool_ids: set[str] = set()
 
-        await client.query(prompt)
+    async for message in query(prompt=prompt, options=options):
+        if isinstance(message, StreamEvent):
+            event = message.event
+            evt_type = event.get("type", "")
+            if evt_type == "content_block_delta":
+                delta = event.get("delta", {})
+                if delta.get("type") == "text_delta":
+                    text = delta.get("text", "")
+                    if text:
+                        yield ClaudeTextEvent(text=text)
 
-        # Track already-yielded text to deduplicate partial messages
-        yielded_text_len = 0
-        yielded_tool_ids: set[str] = set()
+        elif isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    new_text = block.text[yielded_text_len:]
+                    if new_text:
+                        yield ClaudeTextEvent(text=new_text)
+                    yielded_text_len = len(block.text)
+                elif isinstance(block, ToolUseBlock):
+                    if block.id not in yielded_tool_ids:
+                        yielded_tool_ids.add(block.id)
+                        yield ClaudeToolEvent(
+                            tool_name=block.name,
+                            tool_input=block.input
+                            if isinstance(block.input, dict)
+                            else {},
+                        )
 
-        async for message in client.receive_response():
-            if session is not None and session._cancelled:
-                raise ClaudeCancelledError()
+        elif isinstance(message, ResultMessage):
+            yield ClaudeResultEvent(
+                result_text=message.result or "",
+                is_error=message.is_error,
+                cost_usd=message.total_cost_usd,
+                session_id=message.session_id,
+            )
+            return
 
-            if isinstance(message, StreamEvent):
-                # StreamEvent wraps raw API deltas — extract text deltas
-                event = message.event
-                evt_type = event.get("type", "")
-                if evt_type == "content_block_delta":
-                    delta = event.get("delta", {})
-                    if delta.get("type") == "text_delta":
-                        text = delta.get("text", "")
-                        if text:
-                            yield ClaudeTextEvent(text=text)
-
-            elif isinstance(message, AssistantMessage):
-                # Full assistant message — extract tool uses
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        new_text = block.text[yielded_text_len:]
-                        if new_text:
-                            yield ClaudeTextEvent(text=new_text)
-                        yielded_text_len = len(block.text)
-                    elif isinstance(block, ToolUseBlock):
-                        if block.id not in yielded_tool_ids:
-                            yielded_tool_ids.add(block.id)
-                            yield ClaudeToolEvent(
-                                tool_name=block.name,
-                                tool_input=block.input
-                                if isinstance(block.input, dict)
-                                else {},
-                            )
-
-            elif isinstance(message, ResultMessage):
-                yield ClaudeResultEvent(
-                    result_text=message.result or "",
-                    is_error=message.is_error,
-                    cost_usd=message.total_cost_usd,
-                    session_id=message.session_id,
-                )
-                return
-
-            else:
-                # UserMessage, SystemMessage — skip
-                # Reset dedup counters on new turn
-                yielded_text_len = 0
-                yielded_tool_ids = set()
+        else:
+            # UserMessage, SystemMessage — reset dedup counters on new turn
+            yielded_text_len = 0
+            yielded_tool_ids = set()
