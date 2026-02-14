@@ -39,7 +39,6 @@ class WorkItemCard(Widget, can_focus=True):
     WorkItemCard {
         height: auto;
         min-height: 3;
-        margin: 0 0 1 0;
         padding: 0 1;
         border: solid $secondary;
     }
@@ -106,7 +105,6 @@ class UnmanagedCard(Widget, can_focus=True):
     UnmanagedCard {
         height: auto;
         min-height: 3;
-        margin: 0 0 1 0;
         padding: 0 1;
         border: dashed $secondary;
     }
