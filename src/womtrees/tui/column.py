@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
-from womtrees.models import ClaudeSession, PullRequest, WorkItem
+from womtrees.models import ClaudeSession, GitStats, PullRequest, WorkItem
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 
 
@@ -65,6 +65,7 @@ class KanbanColumn(VerticalScroll):
         unmanaged_sessions: list[ClaudeSession],
         group_by_repo: bool,
         prs_by_item: dict[int, list[PullRequest]] | None = None,
+        git_stats: dict[int, GitStats] | None = None,
     ) -> None:
         """Rebuild the column's cards from fresh data."""
         # Remove old cards
@@ -85,10 +86,10 @@ class KanbanColumn(VerticalScroll):
 
         if group_by_repo:
             self._mount_grouped(
-                items, sessions_by_item, unmanaged_sessions, prs_by_item
+                items, sessions_by_item, unmanaged_sessions, prs_by_item, git_stats
             )
         else:
-            self._mount_flat(items, sessions_by_item, unmanaged_sessions, prs_by_item)
+            self._mount_flat(items, sessions_by_item, unmanaged_sessions, prs_by_item, git_stats)
 
     def _mount_grouped(
         self,
@@ -96,6 +97,7 @@ class KanbanColumn(VerticalScroll):
         sessions_by_item: dict[int | None, list[ClaudeSession]],
         unmanaged_sessions: list[ClaudeSession],
         prs_by_item: dict[int, list[PullRequest]] | None = None,
+        git_stats: dict[int, GitStats] | None = None,
     ) -> None:
         # Group items by repo
         by_repo: dict[str, list[WorkItem]] = {}
@@ -117,7 +119,8 @@ class KanbanColumn(VerticalScroll):
             for item in by_repo.get(repo, []):
                 sessions = sessions_by_item.get(item.id, [])
                 item_prs = (prs_by_item or {}).get(item.id, [])
-                card = WorkItemCard(item, sessions, item_prs)
+                stats = git_stats.get(item.id) if git_stats else None
+                card = WorkItemCard(item, sessions, item_prs, git_stats=stats)
                 self.mount(card)
                 self.cards.append(card)
 
@@ -139,11 +142,13 @@ class KanbanColumn(VerticalScroll):
         sessions_by_item: dict[int | None, list[ClaudeSession]],
         unmanaged_sessions: list[ClaudeSession],
         prs_by_item: dict[int, list[PullRequest]] | None = None,
+        git_stats: dict[int, GitStats] | None = None,
     ) -> None:
         for item in items:
             sessions = sessions_by_item.get(item.id, [])
             item_prs = (prs_by_item or {}).get(item.id, [])
-            card = WorkItemCard(item, sessions, item_prs)
+            stats = git_stats.get(item.id) if git_stats else None
+            card = WorkItemCard(item, sessions, item_prs, git_stats=stats)
             self.mount(card)
             self.cards.append(card)
 
