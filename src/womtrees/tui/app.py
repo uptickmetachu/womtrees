@@ -6,8 +6,6 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widgets import Footer, Header, Static
-from textual import work
-
 from womtrees.config import get_config
 from womtrees.db import (
     create_pull_request,
@@ -26,6 +24,7 @@ from womtrees.tui.card import UnmanagedCard, WorkItemCard
 from womtrees.tui.column import KanbanColumn
 from womtrees.tui.dialogs import (
     AutoRebaseDialog,
+    ClaudeStreamDialog,
     CreateDialog,
     DeleteDialog,
     HelpDialog,
@@ -151,7 +150,9 @@ class WomtreesApp(App):
                     pass
 
         board = self.query_one("#board", KanbanBoard)
-        board.refresh_data(items, sessions, self.group_by_repo, pull_requests, git_stats=git_stats)
+        board.refresh_data(
+            items, sessions, self.group_by_repo, pull_requests, git_stats=git_stats
+        )
 
         self._update_status_bar(items, sessions)
 
@@ -665,32 +666,30 @@ class WomtreesApp(App):
             return
 
         item = card.work_item
-        self.notify(f"Creating PR for #{item.id}...")
-        self._run_create_pr(item.id, item.worktree_path, item.branch, item.repo_path)
-
-    @work(thread=True)
-    def _run_create_pr(
-        self, item_id: int, worktree_path: str, branch: str, repo_path: str
-    ) -> None:
-        from womtrees.github import create_pr, detect_pr
-
+        assert item.worktree_path is not None  # guarded above
         config = get_config()
-        try:
-            create_pr(worktree_path, config.pr_prompt, config.claude_args)
-        except Exception as e:
-            self.app.call_from_thread(
-                self.notify, f"Claude PR failed: {e}", severity="error"
-            )
-            return
+
+        self.push_screen(
+            ClaudeStreamDialog(
+                title=f"Creating PR for #{item.id}",
+                prompt=config.pr_prompt,
+                cwd=item.worktree_path,
+                on_result=lambda: self._detect_and_store_pr(
+                    item.id, item.repo_path, item.branch
+                ),
+            ),
+            self._on_claude_dialog_dismiss,
+        )
+
+    def _detect_and_store_pr(
+        self, item_id: int, repo_path: str, branch: str
+    ) -> dict | None:
+        """Detect a newly-created PR and store it in the DB."""
+        from womtrees.github import detect_pr
 
         pr_info = detect_pr(repo_path, branch)
         if pr_info is None:
-            self.app.call_from_thread(
-                self.notify,
-                "PR created but could not detect it via gh",
-                severity="warning",
-            )
-            return
+            return None
 
         conn = get_connection()
         try:
@@ -706,9 +705,14 @@ class WomtreesApp(App):
         finally:
             conn.close()
 
-        url = pr_info.get("url", f"PR #{pr_info['number']}")
-        self.app.call_from_thread(self.notify, f"PR created: {url}")
-        self.app.call_from_thread(self._refresh_board)
+        return pr_info
+
+    def _on_claude_dialog_dismiss(self, result: dict | None) -> None:
+        """Handle ClaudeStreamDialog dismissal."""
+        if result is not None:
+            url = result.get("url", f"PR #{result.get('number', '?')}")
+            self.notify(f"PR created: {url}")
+        self._refresh_board()
 
     # -- Toggle actions --
 
