@@ -132,7 +132,11 @@ def sessions_cmd() -> None:
 
 
 def _maybe_resume_claude(conn, item_id: int) -> None:
-    """If the Claude session for a work item is dead, relaunch it."""
+    """If the Claude session for a work item is dead, relaunch it.
+
+    Only resumes if ALL tracked Claude sessions are dead — avoids
+    auto-launching extra sessions when you already have one running.
+    """
     from womtrees import tmux
     from womtrees.claude import is_pid_alive
 
@@ -146,6 +150,13 @@ def _maybe_resume_claude(conn, item_id: int) -> None:
     # Check if Claude is still alive (if no PID recorded, assume alive)
     if not session.pid or is_pid_alive(session.pid):
         return
+
+    # Only resume if every tracked session is dead — don't pile on when
+    # another session is already running.
+    all_sessions = list_claude_sessions(conn)
+    for s in all_sessions:
+        if s.pid and is_pid_alive(s.pid):
+            return
 
     # Claude is dead — relaunch in the same pane
     config = get_config()

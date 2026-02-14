@@ -518,6 +518,72 @@ def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path):
         mock_send_keys.assert_not_called()
 
 
+def test_attach_skips_resume_if_another_session_alive(runner, db_conn, tmp_path):
+    """Don't resume a dead session when another session is still running."""
+    get_conn_fn, db_path = db_conn
+
+    mock_config = MagicMock()
+    mock_config.base_dir = tmp_path / "worktrees"
+    mock_config.tmux_split = "vertical"
+    mock_config.tmux_claude_pane = "left"
+    mock_config.claude_args = ""
+
+    def pid_alive(pid):
+        # PID 11111 is dead (target), PID 22222 is alive (other session)
+        return pid == 22222
+
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch("womtrees.cli.info.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane"),
+        patch("womtrees.tmux.send_keys") as mock_send_keys,
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.tmux.attach"),
+        patch("womtrees.claude.is_pid_alive", side_effect=pid_alive),
+    ):
+        # Create two work items with sessions
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+        runner.invoke(cli, ["start", "1"])
+
+        conn = get_conn_fn()
+        from womtrees.db import list_claude_sessions, update_claude_session
+
+        # First session: dead (PID 11111)
+        sessions = list_claude_sessions(conn)
+        update_claude_session(
+            conn, sessions[0].id, claude_session_id="uuid-1", pid=11111
+        )
+
+        # Create a second work item + session with a live PID
+        runner.invoke(cli, ["todo", "-b", "feat/y"])
+        with patch(
+            "womtrees.tmux.create_session",
+            return_value=("myrepo-feat-y", "%2"),
+        ):
+            runner.invoke(cli, ["start", "2"])
+        sessions = list_claude_sessions(conn, work_item_id=2)
+        update_claude_session(conn, sessions[0].id, pid=22222)
+
+        mock_send_keys.reset_mock()
+
+        result = runner.invoke(cli, ["attach", "1"])
+        assert result.exit_code == 0
+
+        # Should NOT resume — another session is still alive
+        mock_send_keys.assert_not_called()
+
+
 def test_todo_with_repo_option(runner, db_conn, tmp_path):
     """Test that -r option overrides current repo detection."""
     get_conn_fn, db_path = db_conn
