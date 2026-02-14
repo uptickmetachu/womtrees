@@ -58,7 +58,7 @@ def test_todo_not_in_repo(runner, tmp_path, db_conn):
     get_conn_fn, db_path = db_conn
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.cli.get_current_repo", return_value=None):
-        result = runner.invoke(cli, ["todo", "-b", "feat/x", "-p", "test"])
+        result = runner.invoke(cli, ["todo", "test", "-b", "feat/x"])
         assert result.exit_code != 0
         assert "Not inside a git repository" in result.output
 
@@ -67,7 +67,7 @@ def test_todo_creates_item(runner, db_conn):
     get_conn_fn, db_path = db_conn
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        result = runner.invoke(cli, ["todo", "-b", "feat/x", "-p", "do stuff"])
+        result = runner.invoke(cli, ["todo", "do stuff", "-b", "feat/x"])
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
 
@@ -85,8 +85,8 @@ def test_list_shows_items(runner, db_conn):
     get_conn_fn, db_path = db_conn
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        runner.invoke(cli, ["todo", "-b", "feat/a", "-p", "first"])
-        runner.invoke(cli, ["todo", "-b", "feat/b", "-p", "second"])
+        runner.invoke(cli, ["todo", "first", "-b", "feat/a"])
+        runner.invoke(cli, ["todo", "second", "-b", "feat/b"])
 
         result = runner.invoke(cli, ["list"])
         assert result.exit_code == 0
@@ -110,7 +110,7 @@ def test_status_single(runner, db_conn):
     get_conn_fn, db_path = db_conn
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        runner.invoke(cli, ["todo", "-b", "feat/a", "-p", "my prompt"])
+        runner.invoke(cli, ["todo", "my prompt", "-b", "feat/a"])
 
         result = runner.invoke(cli, ["status", "1"])
         assert result.exit_code == 0
@@ -195,7 +195,7 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
          patch("womtrees.tmux.split_pane", return_value="%1") as mock_split, \
          patch("womtrees.tmux.swap_pane") as mock_swap, \
          patch("womtrees.tmux.send_keys"):
-        runner.invoke(cli, ["todo", "-b", "feat/x", "-p", "test prompt"])
+        runner.invoke(cli, ["todo", "test prompt", "-b", "feat/x"])
 
         result = runner.invoke(cli, ["start", "1"])
         assert result.exit_code == 0
@@ -451,7 +451,7 @@ def test_todo_with_repo_option(runner, db_conn, tmp_path):
 
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        result = runner.invoke(cli, ["todo", "-b", "feat/x", "-r", str(target_repo)])
+        result = runner.invoke(cli, ["todo", "-b", "feat/x", "-r", str(target_repo), "some task"])
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
 
@@ -471,7 +471,7 @@ def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
 
     with patch("womtrees.cli.get_connection", get_conn_fn), \
          patch("womtrees.cli.get_current_repo", return_value=None):
-        result = runner.invoke(cli, ["todo", "-b", "feat/y", "-r", str(target_repo)])
+        result = runner.invoke(cli, ["todo", "-b", "feat/y", "-r", str(target_repo), "some task"])
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
+import sys
 
 import click
 
@@ -38,13 +40,77 @@ def _resolve_repo(repo_path_str: str | None) -> tuple[str, str]:
     return repo
 
 
+def _slugify(text: str) -> str:
+    """Convert text to a branch-safe slug (lowercase, dashes, no special chars)."""
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = text.strip("-")
+    return text or "task"
+
+
+def _generate_name(prompt: str) -> str:
+    """Generate a short kebab-case name for a task using claude -p.
+
+    Falls back to a truncated slug of the prompt if claude fails.
+    """
+    instruction = (
+        "Generate a short 2-3 word kebab-case name for this task. "
+        "Output ONLY the name, nothing else. Example: fix-login-bug\n\n"
+        f"Task: {prompt}"
+    )
+    try:
+        result = subprocess.run(
+            ["claude", "-p", instruction, "--model", "haiku"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            name = result.stdout.strip()
+            # Sanitize the output — claude might add quotes or extra text
+            name = _slugify(name)
+            if name and len(name) <= 50:
+                return name
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    # Fallback: truncated slug of the prompt
+    return _slugify(prompt)[:40]
+
+
+def _read_prompt(prompt_arg: str | None) -> str | None:
+    """Read prompt from positional arg or stdin if piped."""
+    if prompt_arg:
+        return prompt_arg
+    if not sys.stdin.isatty():
+        text = sys.stdin.read().strip()
+        if text:
+            return text
+    return None
+
+
 @cli.command()
-@click.option("-b", "--branch", required=True, help="Branch name for the worktree.")
-@click.option("-p", "--prompt", default=None, help="Task description / Claude prompt.")
+@click.argument("prompt", required=False, default=None)
+@click.option("-b", "--branch", default=None, help="Branch name for the worktree.")
 @click.option("-n", "--name", default=None, help="Human-readable name for the work item.")
 @click.option("-r", "--repo", "repo_path", default=None, help="Target repo path (default: current git repo).")
-def todo(branch: str, prompt: str | None, name: str | None, repo_path: str | None) -> None:
-    """Create a TODO work item (queued for later)."""
+def todo(prompt: str | None, branch: str | None, name: str | None, repo_path: str | None) -> None:
+    """Create a TODO work item (queued for later).
+
+    PROMPT is the task description. Can also be piped via stdin.
+    If --branch is omitted, a branch name is auto-generated from the prompt.
+    """
+    prompt = _read_prompt(prompt)
+    if not prompt and not branch:
+        raise click.ClickException("Provide a prompt (positional arg or stdin) or --branch.")
+
+    config = get_config()
+
+    if name is None and prompt:
+        name = _generate_name(prompt)
+    if branch is None:
+        slug = _slugify(name) if name else "task"
+        branch = f"{config.branch_prefix}/{slug}"
+
     repo_name, resolved_path = _resolve_repo(repo_path)
     conn = get_connection()
     try:
@@ -57,14 +123,29 @@ def todo(branch: str, prompt: str | None, name: str | None, repo_path: str | Non
 
 
 @cli.command()
-@click.option("-b", "--branch", required=True, help="Branch name for the worktree.")
-@click.option("-p", "--prompt", default=None, help="Task description / Claude prompt.")
+@click.argument("prompt", required=False, default=None)
+@click.option("-b", "--branch", default=None, help="Branch name for the worktree.")
 @click.option("-n", "--name", default=None, help="Human-readable name for the work item.")
 @click.option("-r", "--repo", "repo_path", default=None, help="Target repo path (default: current git repo).")
-def create(branch: str, prompt: str | None, name: str | None, repo_path: str | None) -> None:
-    """Create a work item and immediately launch it."""
-    repo_name, resolved_path = _resolve_repo(repo_path)
+def create(prompt: str | None, branch: str | None, name: str | None, repo_path: str | None) -> None:
+    """Create a work item and immediately launch it.
+
+    PROMPT is the task description. Can also be piped via stdin.
+    If --branch is omitted, a branch name is auto-generated from the prompt.
+    """
+    prompt = _read_prompt(prompt)
+    if not prompt and not branch:
+        raise click.ClickException("Provide a prompt (positional arg or stdin) or --branch.")
+
     config = get_config()
+
+    if name is None and prompt:
+        name = _generate_name(prompt)
+    if branch is None:
+        slug = _slugify(name) if name else "task"
+        branch = f"{config.branch_prefix}/{slug}"
+
+    repo_name, resolved_path = _resolve_repo(repo_path)
     conn = get_connection()
 
     try:
