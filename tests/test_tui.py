@@ -291,27 +291,6 @@ async def test_app_toggle_grouping():
 
 
 @pytest.mark.asyncio
-async def test_app_toggle_all():
-    """Pressing 'a' should toggle show_all."""
-    from womtrees.tui.app import WomtreesApp
-
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        conn = MagicMock()
-        mock_conn.return_value = conn
-
-        with patch("womtrees.tui.app.list_work_items", return_value=[]):
-            with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
-                app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
-                    assert app.show_all is False
-                    await pilot.press("a")
-                    assert app.show_all is True
-                    await pilot.press("a")
-                    assert app.show_all is False
-
-
-@pytest.mark.asyncio
 async def test_app_status_bar():
     """Status bar should show item counts."""
     from womtrees.tui.app import WomtreesApp
@@ -336,27 +315,6 @@ async def test_app_status_bar():
                     text = status.content
                     assert "2 todo" in text
                     assert "1 working" in text
-                    assert "myrepo" in text
-
-
-@pytest.mark.asyncio
-async def test_app_show_all_flag():
-    """WomtreesApp(show_all=True) should start in all-repos mode."""
-    from womtrees.tui.app import WomtreesApp
-    from textual.widgets import Static
-
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        conn = MagicMock()
-        mock_conn.return_value = conn
-
-        with patch("womtrees.tui.app.list_work_items", return_value=[]):
-            with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
-                app = WomtreesApp(show_all=True)
-                async with app.run_test(size=(120, 40)) as pilot:
-                    assert app.show_all is True
-                    status = app.query_one("#status-counts", Static)
-                    text = status.content
                     assert "all repos" in text
 
 

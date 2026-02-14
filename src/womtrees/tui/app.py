@@ -67,12 +67,10 @@ class WomtreesApp(App):
         Binding("m", "merge_item", "Merge", show=True),
         Binding("d", "delete_item", "Delete", show=True),
         Binding("g", "toggle_grouping", "Group", show=True),
-        Binding("a", "toggle_all", "All", show=True),
     ]
 
-    def __init__(self, show_all: bool = False, **kwargs) -> None:
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.show_all = show_all
         self.group_by_repo = True
         self.active_column_idx = 0
         self.repo_context = get_current_repo()
@@ -119,13 +117,8 @@ class WomtreesApp(App):
             return
 
         try:
-            if self.show_all or self.repo_context is None:
-                items = list_work_items(conn)
-                sessions = list_claude_sessions(conn)
-            else:
-                repo_name = self.repo_context[0]
-                items = list_work_items(conn, repo_name=repo_name)
-                sessions = list_claude_sessions(conn, repo_name=repo_name)
+            items = list_work_items(conn)
+            sessions = list_claude_sessions(conn)
         finally:
             conn.close()
 
@@ -165,7 +158,7 @@ class WomtreesApp(App):
             counts[item.status] = counts.get(item.status, 0) + 1
 
         unmanaged = sum(1 for s in sessions if s.work_item_id is None)
-        repo_label = self.repo_context[0] if self.repo_context and not self.show_all else "all repos"
+        repo_label = "all repos"
 
         status_text = (
             f"{repo_label} | "
@@ -501,12 +494,6 @@ class WomtreesApp(App):
         self.group_by_repo = not self.group_by_repo
         label = "on" if self.group_by_repo else "off"
         self.notify(f"Repo grouping: {label}")
-        self._refresh_board()
-
-    def action_toggle_all(self) -> None:
-        self.show_all = not self.show_all
-        label = "all repos" if self.show_all else "current repo"
-        self.notify(f"Showing: {label}")
         self._refresh_board()
 
     def action_help(self) -> None:
