@@ -82,7 +82,10 @@ class CreateDialog(ModalScreen[dict | None]):
                 seen.add(key)
                 options.append((repo_name, repo_path))
         # Ensure default repo is in the list
-        if self.default_repo and (self.default_repo[0], self.default_repo[1]) not in seen:
+        if (
+            self.default_repo
+            and (self.default_repo[0], self.default_repo[1]) not in seen
+        ):
             options.insert(0, (self.default_repo[0], self.default_repo[1]))
         options.append(("Other...", self._OTHER_SENTINEL))
 
@@ -155,14 +158,16 @@ class CreateDialog(ModalScreen[dict | None]):
             branch_input.focus()
             return
 
-        self.dismiss({
-            "branch": branch,
-            "prompt": prompt,
-            "name": name,
-            "mode": self.mode,
-            "repo_name": repo_name,
-            "repo_path": repo_path,
-        })
+        self.dismiss(
+            {
+                "branch": branch,
+                "prompt": prompt,
+                "name": name,
+                "mode": self.mode,
+                "repo_name": repo_name,
+                "repo_path": repo_path,
+            }
+        )
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -271,6 +276,118 @@ class MergeDialog(ModalScreen[bool]):
             yield Label(self.message)
             with Grid(classes="buttons"):
                 yield Button("Merge", variant="success", id="confirm")
+                yield Button("Cancel", variant="primary", id="cancel")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm":
+            self.action_confirm()
+        else:
+            self.action_cancel()
+
+
+class RebaseDialog(ModalScreen[bool]):
+    """Prompt dialog offering to rebase a branch before merging."""
+
+    BINDINGS = [
+        Binding("ctrl+enter", "confirm", "Confirm", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    RebaseDialog {
+        align: center middle;
+    }
+
+    RebaseDialog #dialog {
+        width: 55;
+        height: auto;
+        padding: 1 2;
+        border: thick $warning;
+        background: $surface;
+    }
+
+    RebaseDialog .buttons {
+        height: auto;
+        margin: 1 0 0 0;
+        align: center middle;
+    }
+
+    RebaseDialog .buttons Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, message: str, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.message = message
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(self.message)
+            with Grid(classes="buttons"):
+                yield Button("Rebase", variant="warning", id="confirm")
+                yield Button("Cancel", variant="primary", id="cancel")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm":
+            self.action_confirm()
+        else:
+            self.action_cancel()
+
+
+class AutoRebaseDialog(ModalScreen[bool]):
+    """Prompt dialog offering to use Claude to auto-rebase a branch."""
+
+    BINDINGS = [
+        Binding("ctrl+enter", "confirm", "Confirm", show=False),
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    AutoRebaseDialog {
+        align: center middle;
+    }
+
+    AutoRebaseDialog #dialog {
+        width: 60;
+        height: auto;
+        padding: 1 2;
+        border: thick $error;
+        background: $surface;
+    }
+
+    AutoRebaseDialog .buttons {
+        height: auto;
+        margin: 1 0 0 0;
+        align: center middle;
+    }
+
+    AutoRebaseDialog .buttons Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, message: str, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.message = message
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(self.message)
+            with Grid(classes="buttons"):
+                yield Button("Auto-rebase", variant="error", id="confirm")
                 yield Button("Cancel", variant="primary", id="cancel")
 
     def action_confirm(self) -> None:
