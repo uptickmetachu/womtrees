@@ -441,6 +441,7 @@ class HelpDialog(ModalScreen):
             yield Label("t         Create TODO")
             yield Label("r         Move to review")
             yield Label("m         Merge into default branch")
+            yield Label("p         Create PR via Claude")
             yield Label("d         Delete")
             yield Label("g         Toggle repo grouping")
             yield Label("a         Toggle all/repo view")
