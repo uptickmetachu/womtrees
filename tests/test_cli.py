@@ -56,8 +56,10 @@ def test_help(runner):
 
 def test_todo_not_in_repo(runner, tmp_path, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=None):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=None),
+    ):
         result = runner.invoke(cli, ["todo", "test", "-b", "feat/x"])
         assert result.exit_code != 0
         assert "Not inside a git repository" in result.output
@@ -65,8 +67,10 @@ def test_todo_not_in_repo(runner, tmp_path, db_conn):
 
 def test_todo_creates_item(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         result = runner.invoke(cli, ["todo", "do stuff", "-b", "feat/x"])
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
@@ -74,8 +78,9 @@ def test_todo_creates_item(runner, db_conn):
 
 def test_list_empty(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+    ):
         result = runner.invoke(cli, ["list"])
         assert result.exit_code == 0
         assert "No work items found" in result.output
@@ -83,8 +88,11 @@ def test_list_empty(runner, db_conn):
 
 def test_list_shows_items(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "first", "-b", "feat/a"])
         runner.invoke(cli, ["todo", "second", "-b", "feat/b"])
 
@@ -96,8 +104,11 @@ def test_list_shows_items(runner, db_conn):
 
 def test_status_summary(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/a"])
         runner.invoke(cli, ["todo", "-b", "feat/b"])
 
@@ -108,8 +119,11 @@ def test_status_summary(runner, db_conn):
 
 def test_status_single(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "my prompt", "-b", "feat/a"])
 
         result = runner.invoke(cli, ["status", "1"])
@@ -120,8 +134,10 @@ def test_status_single(runner, db_conn):
 
 def test_review_transition(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/a"])
 
         # Can't review a TODO
@@ -132,8 +148,10 @@ def test_review_transition(runner, db_conn):
 
 def test_done_transition(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/a"])
 
         # Can't mark TODO as done
@@ -144,8 +162,11 @@ def test_done_transition(runner, db_conn):
 
 def test_delete_todo(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/a"])
 
         result = runner.invoke(cli, ["delete", "1"])
@@ -158,7 +179,7 @@ def test_delete_todo(runner, db_conn):
 
 def test_delete_nonexistent(runner, db_conn):
     get_conn_fn, db_path = db_conn
-    with patch("womtrees.cli.get_connection", get_conn_fn):
+    with patch("womtrees.cli.items.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["delete", "999"])
         assert result.exit_code != 0
         assert "not found" in result.output
@@ -167,7 +188,7 @@ def test_delete_nonexistent(runner, db_conn):
 def test_config_show(runner, tmp_path):
     config_file = tmp_path / "config.toml"
     config_file.write_text('[worktrees]\nbase_dir = "/tmp/wt"\n')
-    with patch("womtrees.cli.ensure_config", return_value=config_file):
+    with patch("womtrees.cli.admin.ensure_config", return_value=config_file):
         result = runner.invoke(cli, ["config"])
         assert result.exit_code == 0
         assert "base_dir" in result.output
@@ -185,16 +206,23 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")) as mock_create, \
-         patch("womtrees.tmux.set_environment") as mock_setenv, \
-         patch("womtrees.tmux.split_pane", return_value="%1") as mock_split, \
-         patch("womtrees.tmux.swap_pane") as mock_swap, \
-         patch("womtrees.tmux.send_keys"):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch(
+            "womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")
+        ) as mock_create,
+        patch("womtrees.tmux.set_environment") as mock_setenv,
+        patch("womtrees.tmux.split_pane", return_value="%1") as mock_split,
+        patch("womtrees.tmux.swap_pane") as mock_swap,
+        patch("womtrees.tmux.send_keys"),
+    ):
         runner.invoke(cli, ["todo", "test prompt", "-b", "feat/x"])
 
         result = runner.invoke(cli, ["start", "1"])
@@ -203,7 +231,9 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
         assert "myrepo/feat-x" in result.output
 
         mock_create.assert_called_once()
-        mock_setenv.assert_called_once_with("myrepo/feat-x", "WOMTREE_WORK_ITEM_ID", "1")
+        mock_setenv.assert_called_once_with(
+            "myrepo/feat-x", "WOMTREE_WORK_ITEM_ID", "1"
+        )
         mock_split.assert_called_once()
         mock_swap.assert_called_once()  # claude_pane=left triggers swap
 
@@ -217,16 +247,21 @@ def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path):
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "right"
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane") as mock_swap, \
-         patch("womtrees.tmux.send_keys"):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane") as mock_swap,
+        patch("womtrees.tmux.send_keys"),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         result = runner.invoke(cli, ["start", "1"])
         assert result.exit_code == 0
@@ -239,10 +274,12 @@ def test_start_fails_without_tmux(runner, db_conn):
 
     mock_config = MagicMock()
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.tmux.is_available", return_value=False):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch("womtrees.tmux.is_available", return_value=False),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         result = runner.invoke(cli, ["start", "1"])
         assert result.exit_code != 0
@@ -258,19 +295,24 @@ def test_delete_kills_tmux_session(runner, db_conn, tmp_path):
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.cli.remove_worktree"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane"), \
-         patch("womtrees.tmux.send_keys"), \
-         patch("womtrees.tmux.session_exists", return_value=True), \
-         patch("womtrees.tmux.kill_session") as mock_kill:
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.cli.items.remove_worktree"),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane"),
+        patch("womtrees.tmux.send_keys"),
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.tmux.kill_session") as mock_kill,
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         runner.invoke(cli, ["start", "1"])
 
@@ -289,18 +331,24 @@ def test_attach_command(runner, db_conn, tmp_path):
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane"), \
-         patch("womtrees.tmux.send_keys"), \
-         patch("womtrees.tmux.session_exists", return_value=True), \
-         patch("womtrees.tmux.attach") as mock_attach:
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane"),
+        patch("womtrees.tmux.send_keys"),
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.tmux.attach") as mock_attach,
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         runner.invoke(cli, ["start", "1"])
 
@@ -313,8 +361,11 @@ def test_attach_no_session(runner, db_conn):
     """Test wt attach fails when work item has no tmux session."""
     get_conn_fn, db_path = db_conn
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
 
         result = runner.invoke(cli, ["attach", "1"])
@@ -332,27 +383,37 @@ def test_attach_resumes_dead_session(runner, db_conn, tmp_path):
     mock_config.tmux_claude_pane = "left"
     mock_config.claude_args = ""
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane"), \
-         patch("womtrees.tmux.send_keys") as mock_send_keys, \
-         patch("womtrees.tmux.session_exists", return_value=True), \
-         patch("womtrees.tmux.attach"), \
-         patch("womtrees.claude.is_pid_alive", return_value=False):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch("womtrees.cli.info.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane"),
+        patch("womtrees.tmux.send_keys") as mock_send_keys,
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.tmux.attach"),
+        patch("womtrees.claude.is_pid_alive", return_value=False),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         runner.invoke(cli, ["start", "1"])
 
         # Update the session to have a claude_session_id and PID
         conn = get_conn_fn()
         from womtrees.db import list_claude_sessions, update_claude_session
+
         sessions = list_claude_sessions(conn)
-        update_claude_session(conn, sessions[0].id, claude_session_id="test-uuid-123", pid=99999)
+        update_claude_session(
+            conn, sessions[0].id, claude_session_id="test-uuid-123", pid=99999
+        )
 
         mock_send_keys.reset_mock()
 
@@ -375,25 +436,33 @@ def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path):
     mock_config.tmux_claude_pane = "left"
     mock_config.claude_args = ""
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane"), \
-         patch("womtrees.tmux.send_keys") as mock_send_keys, \
-         patch("womtrees.tmux.session_exists", return_value=True), \
-         patch("womtrees.tmux.attach"), \
-         patch("womtrees.claude.is_pid_alive", return_value=False):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch("womtrees.cli.info.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane"),
+        patch("womtrees.tmux.send_keys") as mock_send_keys,
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.tmux.attach"),
+        patch("womtrees.claude.is_pid_alive", return_value=False),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         runner.invoke(cli, ["start", "1"])
 
         # Set a PID so resume check runs (no claude_session_id → fallback)
         conn = get_conn_fn()
         from womtrees.db import list_claude_sessions, update_claude_session
+
         sessions = list_claude_sessions(conn)
         update_claude_session(conn, sessions[0].id, pid=99999)
 
@@ -418,19 +487,25 @@ def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path):
     mock_config.tmux_claude_pane = "left"
     mock_config.claude_args = ""
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.swap_pane"), \
-         patch("womtrees.tmux.send_keys") as mock_send_keys, \
-         patch("womtrees.tmux.session_exists", return_value=True), \
-         patch("womtrees.tmux.attach"), \
-         patch("womtrees.claude.is_pid_alive", return_value=True):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.swap_pane"),
+        patch("womtrees.tmux.send_keys") as mock_send_keys,
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.tmux.attach"),
+        patch("womtrees.claude.is_pid_alive", return_value=True),
+    ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         runner.invoke(cli, ["start", "1"])
 
@@ -449,15 +524,20 @@ def test_todo_with_repo_option(runner, db_conn, tmp_path):
     target_repo = tmp_path / "other-project"
     target_repo.mkdir()
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
-        result = runner.invoke(cli, ["todo", "-b", "feat/x", "-r", str(target_repo), "some task"])
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+    ):
+        result = runner.invoke(
+            cli, ["todo", "-b", "feat/x", "-r", str(target_repo), "some task"]
+        )
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
 
         # Verify the item was created with the specified repo
         conn = get_conn_fn()
         from womtrees.db import get_work_item
+
         item = get_work_item(conn, 1)
         assert item.repo_name == "other-project"
         assert item.repo_path == str(target_repo)
@@ -469,9 +549,13 @@ def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
     target_repo = tmp_path / "standalone"
     target_repo.mkdir()
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=None):
-        result = runner.invoke(cli, ["todo", "-b", "feat/y", "-r", str(target_repo), "some task"])
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=None),
+    ):
+        result = runner.invoke(
+            cli, ["todo", "-b", "feat/y", "-r", str(target_repo), "some task"]
+        )
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
 
@@ -487,20 +571,29 @@ def test_create_with_repo_option(runner, db_conn, tmp_path):
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "right"
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.cli.get_config", return_value=mock_config), \
-         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "another-project" / "feat-z"), \
-         patch("womtrees.tmux.is_available", return_value=True), \
-         patch("womtrees.tmux.create_session", return_value=("another-project/feat-z", "%0")), \
-         patch("womtrees.tmux.set_environment"), \
-         patch("womtrees.tmux.split_pane", return_value="%1"), \
-         patch("womtrees.tmux.send_keys"):
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch("womtrees.cli.utils.get_current_repo", return_value=("myrepo", "/tmp/myrepo")),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "another-project" / "feat-z",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch(
+            "womtrees.tmux.create_session",
+            return_value=("another-project/feat-z", "%0"),
+        ),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.send_keys"),
+    ):
         result = runner.invoke(cli, ["create", "-b", "feat/z", "-r", str(target_repo)])
         assert result.exit_code == 0
 
         conn = get_conn_fn()
         from womtrees.db import get_work_item
+
         item = get_work_item(conn, 1)
         assert item.repo_name == "another-project"
         assert item.repo_path == str(target_repo)

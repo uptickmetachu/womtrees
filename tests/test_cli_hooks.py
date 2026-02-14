@@ -51,8 +51,10 @@ def test_hook_heartbeat_creates_session(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
@@ -73,9 +75,14 @@ def test_hook_heartbeat_updates_existing(runner, db_conn):
     # Pre-create a session
     conn = get_conn_fn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="myrepo/feat-auth", tmux_pane="%1",
-        state="waiting", pid=1234,
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="myrepo/feat-auth",
+        tmux_pane="%1",
+        state="waiting",
+        pid=1234,
     )
 
     mock_context = {
@@ -88,8 +95,10 @@ def test_hook_heartbeat_updates_existing(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
@@ -114,8 +123,10 @@ def test_hook_stop_sets_done(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "stop"])
         assert result.exit_code == 0
 
@@ -139,8 +150,10 @@ def test_hook_input_sets_waiting(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "input"])
         assert result.exit_code == 0
 
@@ -168,8 +181,10 @@ def test_hook_heartbeat_with_work_item(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
@@ -193,8 +208,10 @@ def test_hook_heartbeat_silent_without_tmux(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
@@ -210,11 +227,16 @@ def test_hook_mark_done(runner, db_conn):
 
     conn = get_conn_fn()
     session = create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
     )
 
-    with patch("womtrees.cli.get_connection", get_conn_fn):
+    with patch("womtrees.cli.hooks.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["hook", "mark-done", str(session.id)])
         assert result.exit_code == 0
 
@@ -229,17 +251,28 @@ def test_sessions_command(runner, db_conn):
 
     conn = get_conn_fn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
     )
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%2", state="waiting",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%2",
+        state="waiting",
     )
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
-         patch("womtrees.claude.is_pid_alive", return_value=True):
+    with (
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.claude.is_pid_alive", return_value=True),
+    ):
         result = runner.invoke(cli, ["sessions"])
         assert result.exit_code == 0
         assert "working" in result.output
@@ -250,8 +283,9 @@ def test_sessions_empty(runner, db_conn):
     """Test wt sessions when no sessions exist."""
     get_conn_fn, db_path = db_conn
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.cli.info.get_connection", get_conn_fn),
+    ):
         result = runner.invoke(cli, ["sessions"])
         assert result.exit_code == 0
         assert "No Claude sessions found" in result.output
@@ -274,8 +308,13 @@ def test_hook_heartbeat_moves_item_to_working(runner, db_conn):
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     update_work_item(conn, item.id, status="input")
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="waiting",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="waiting",
         work_item_id=item.id,
     )
 
@@ -289,8 +328,10 @@ def test_hook_heartbeat_moves_item_to_working(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
@@ -307,8 +348,13 @@ def test_hook_input_moves_item_to_input(runner, db_conn):
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     update_work_item(conn, item.id, status="working")
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
         work_item_id=item.id,
     )
 
@@ -322,8 +368,10 @@ def test_hook_input_moves_item_to_input(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "input"])
         assert result.exit_code == 0
 
@@ -340,8 +388,13 @@ def test_hook_stop_moves_item_to_review(runner, db_conn):
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     update_work_item(conn, item.id, status="working")
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
         work_item_id=item.id,
     )
 
@@ -355,8 +408,10 @@ def test_hook_stop_moves_item_to_review(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "stop"])
         assert result.exit_code == 0
 
@@ -373,8 +428,13 @@ def test_hook_skips_todo_items(runner, db_conn):
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     # Item stays in 'todo' (default)
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
         work_item_id=item.id,
     )
 
@@ -388,8 +448,10 @@ def test_hook_skips_todo_items(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "stop"])
         assert result.exit_code == 0
 
@@ -406,8 +468,13 @@ def test_hook_skips_done_items(runner, db_conn):
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     update_work_item(conn, item.id, status="done")
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="done",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="done",
         work_item_id=item.id,
     )
 
@@ -421,8 +488,10 @@ def test_hook_skips_done_items(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
@@ -445,9 +514,13 @@ def test_hook_heartbeat_captures_session_id(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
-        result = runner.invoke(cli, ["hook", "heartbeat"], input='{"session_id": "abc-123-def"}')
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
+        result = runner.invoke(
+            cli, ["hook", "heartbeat"], input='{"session_id": "abc-123-def"}'
+        )
         assert result.exit_code == 0
 
     conn = get_conn_fn()
@@ -463,8 +536,14 @@ def test_hook_heartbeat_updates_session_id(runner, db_conn):
     # Pre-create a session without claude_session_id
     conn = get_conn_fn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working", pid=1234,
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
+        pid=1234,
     )
 
     mock_context = {
@@ -477,9 +556,13 @@ def test_hook_heartbeat_updates_session_id(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
-        result = runner.invoke(cli, ["hook", "heartbeat"], input='{"session_id": "new-uuid-456"}')
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
+        result = runner.invoke(
+            cli, ["hook", "heartbeat"], input='{"session_id": "new-uuid-456"}'
+        )
         assert result.exit_code == 0
 
     conn = get_conn_fn()
@@ -502,8 +585,10 @@ def test_hook_heartbeat_no_stdin(runner, db_conn):
         "pid": 1234,
     }
 
-    with patch("womtrees.cli.get_connection", get_conn_fn), \
-         patch("womtrees.claude.detect_context", return_value=mock_context):
+    with (
+        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.claude.detect_context", return_value=mock_context),
+    ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
         assert result.exit_code == 0
 
