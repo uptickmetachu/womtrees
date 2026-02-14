@@ -23,11 +23,16 @@ def hook() -> None:
 
 @hook.command()
 def install() -> None:
-    """Install Claude Code hooks for automatic session tracking."""
-    from womtrees.claude import install_global_hooks
+    """Install Claude Code hooks and tmux status bar integration."""
+    from womtrees.claude import configure_tmux_status_bar, install_global_hooks
 
     install_global_hooks()
     click.echo("Installed womtrees hooks into Claude Code settings.")
+
+    if configure_tmux_status_bar():
+        click.echo("Configured tmux status bar (wt status --tmux).")
+    else:
+        click.echo("Tmux status bar already configured.")
 
 
 @hook.command()
