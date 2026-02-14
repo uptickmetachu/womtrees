@@ -226,18 +226,27 @@ class WomtreesApp(App):
     def action_jump(self) -> None:
         """Jump to the tmux session for the focused card."""
         from womtrees import tmux
+        from womtrees.cli import _maybe_resume_claude
 
         card = self._get_focused_card()
         if card is None:
             return
 
         session_name = None
+        work_item_id = None
         if isinstance(card, WorkItemCard) and card.work_item.tmux_session:
             session_name = card.work_item.tmux_session
+            work_item_id = card.work_item.id
         elif isinstance(card, UnmanagedCard) and card.sessions:
             session_name = card.sessions[0].tmux_session
 
         if session_name and tmux.session_exists(session_name):
+            # Resume dead Claude session before attaching
+            if work_item_id is not None:
+                conn = get_connection()
+                _maybe_resume_claude(conn, work_item_id)
+                conn.close()
+
             with self.suspend():
                 tmux.attach(session_name)
 

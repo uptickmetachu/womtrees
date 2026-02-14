@@ -279,6 +279,40 @@ def delete(item_id: int, force: bool) -> None:
     click.echo(f"Deleted #{item_id}")
 
 
+def _maybe_resume_claude(conn, item_id: int) -> None:
+    """If the Claude session for a work item is dead, relaunch it."""
+    from womtrees import tmux
+    from womtrees.claude import is_pid_alive
+
+    sessions = list_claude_sessions(conn, work_item_id=item_id)
+    if not sessions:
+        return
+
+    # Use the most recent non-done session
+    session = next((s for s in reversed(sessions) if s.state != "done"), None)
+    if session is None:
+        return
+
+    # Check if Claude is still alive (if no PID recorded, assume alive)
+    if not session.pid or is_pid_alive(session.pid):
+        return
+
+    # Claude is dead — relaunch in the same pane
+    config = get_config()
+    claude_cmd = "claude"
+    if config.claude_args:
+        claude_cmd += f" {config.claude_args}"
+    if session.claude_session_id:
+        claude_cmd += f" --resume {session.claude_session_id}"
+    else:
+        claude_cmd += " --continue"
+
+    try:
+        tmux.send_keys(session.tmux_pane, claude_cmd)
+    except subprocess.CalledProcessError:
+        pass  # Pane may not exist
+
+
 @cli.command()
 @click.argument("item_id", type=int)
 @click.option("--session", "session_id", type=int, default=None, help="Jump to a specific Claude session pane.")
@@ -299,9 +333,11 @@ def attach(item_id: int, session_id: int | None) -> None:
         conn.close()
         raise click.ClickException(f"Tmux session '{item.tmux_session}' no longer exists.")
 
+    # Resume dead Claude session before attaching
+    _maybe_resume_claude(conn, item_id)
+
     # If a specific Claude session is requested, select its pane
     if session_id is not None:
-        from womtrees.db import get_claude_session
         session = get_claude_session(conn, session_id)
         if session and session.tmux_pane:
             tmux.select_pane(item.tmux_session, session.tmux_pane)
@@ -466,8 +502,12 @@ def _handle_hook(session_state: str, item_status: str) -> None:
     """Shared logic for hook commands.
 
     Updates the Claude session state and, if a linked work item exists,
-    transitions it to the given item_status.
+    transitions it to the given item_status. Reads Claude Code's hook JSON
+    from stdin to capture the session_id for --resume support.
     """
+    import json
+    import sys
+
     from womtrees.claude import detect_context
 
     ctx = detect_context()
@@ -476,13 +516,25 @@ def _handle_hook(session_state: str, item_status: str) -> None:
     if not ctx["tmux_session"] or not ctx["tmux_pane"]:
         return
 
+    # Read Claude Code's hook JSON from stdin to capture session_id
+    claude_session_id = None
+    if not sys.stdin.isatty():
+        try:
+            hook_input = json.loads(sys.stdin.read())
+            claude_session_id = hook_input.get("session_id")
+        except (json.JSONDecodeError, OSError):
+            pass
+
     conn = get_connection()
 
     # Try to find existing session
     session = find_claude_session(conn, ctx["tmux_session"], ctx["tmux_pane"])
 
     if session:
-        update_claude_session(conn, session.id, state=session_state, pid=ctx["pid"])
+        update_fields = {"state": session_state, "pid": ctx["pid"]}
+        if claude_session_id:
+            update_fields["claude_session_id"] = claude_session_id
+        update_claude_session(conn, session.id, **update_fields)
         work_item_id = session.work_item_id
     else:
         # Create new session
@@ -496,6 +548,7 @@ def _handle_hook(session_state: str, item_status: str) -> None:
             pid=ctx["pid"],
             work_item_id=ctx["work_item_id"],
             state=session_state,
+            claude_session_id=claude_session_id,
         )
         work_item_id = cs.work_item_id
 

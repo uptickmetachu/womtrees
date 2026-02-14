@@ -320,3 +320,124 @@ def test_attach_no_session(runner, db_conn):
         result = runner.invoke(cli, ["attach", "1"])
         assert result.exit_code != 0
         assert "no tmux session" in result.output
+
+
+def test_attach_resumes_dead_session(runner, db_conn, tmp_path):
+    """Test that wt attach relaunches Claude if the process is dead."""
+    get_conn_fn, db_path = db_conn
+
+    mock_config = MagicMock()
+    mock_config.base_dir = tmp_path / "worktrees"
+    mock_config.tmux_split = "vertical"
+    mock_config.tmux_claude_pane = "left"
+    mock_config.claude_args = ""
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
+         patch("womtrees.cli.get_config", return_value=mock_config), \
+         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
+         patch("womtrees.tmux.is_available", return_value=True), \
+         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")), \
+         patch("womtrees.tmux.set_environment"), \
+         patch("womtrees.tmux.split_pane", return_value="%1"), \
+         patch("womtrees.tmux.swap_pane"), \
+         patch("womtrees.tmux.send_keys") as mock_send_keys, \
+         patch("womtrees.tmux.session_exists", return_value=True), \
+         patch("womtrees.tmux.attach"), \
+         patch("womtrees.claude.is_pid_alive", return_value=False):
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+        runner.invoke(cli, ["start", "1"])
+
+        # Update the session to have a claude_session_id and PID
+        conn = get_conn_fn()
+        from womtrees.db import list_claude_sessions, update_claude_session
+        sessions = list_claude_sessions(conn)
+        update_claude_session(conn, sessions[0].id, claude_session_id="test-uuid-123", pid=99999)
+
+        mock_send_keys.reset_mock()
+
+        result = runner.invoke(cli, ["attach", "1"])
+        assert result.exit_code == 0
+
+        # Should have sent claude --resume to the pane
+        mock_send_keys.assert_called_once()
+        call_args = mock_send_keys.call_args
+        assert "--resume test-uuid-123" in call_args[0][1]
+
+
+def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path):
+    """Test that wt attach falls back to --continue if no session_id."""
+    get_conn_fn, db_path = db_conn
+
+    mock_config = MagicMock()
+    mock_config.base_dir = tmp_path / "worktrees"
+    mock_config.tmux_split = "vertical"
+    mock_config.tmux_claude_pane = "left"
+    mock_config.claude_args = ""
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
+         patch("womtrees.cli.get_config", return_value=mock_config), \
+         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
+         patch("womtrees.tmux.is_available", return_value=True), \
+         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")), \
+         patch("womtrees.tmux.set_environment"), \
+         patch("womtrees.tmux.split_pane", return_value="%1"), \
+         patch("womtrees.tmux.swap_pane"), \
+         patch("womtrees.tmux.send_keys") as mock_send_keys, \
+         patch("womtrees.tmux.session_exists", return_value=True), \
+         patch("womtrees.tmux.attach"), \
+         patch("womtrees.claude.is_pid_alive", return_value=False):
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+        runner.invoke(cli, ["start", "1"])
+
+        # Set a PID so resume check runs (no claude_session_id → fallback)
+        conn = get_conn_fn()
+        from womtrees.db import list_claude_sessions, update_claude_session
+        sessions = list_claude_sessions(conn)
+        update_claude_session(conn, sessions[0].id, pid=99999)
+
+        mock_send_keys.reset_mock()
+
+        result = runner.invoke(cli, ["attach", "1"])
+        assert result.exit_code == 0
+
+        # Should have sent claude --continue (no session_id stored)
+        mock_send_keys.assert_called_once()
+        call_args = mock_send_keys.call_args
+        assert "--continue" in call_args[0][1]
+
+
+def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path):
+    """Test that wt attach does NOT relaunch Claude if process is alive."""
+    get_conn_fn, db_path = db_conn
+
+    mock_config = MagicMock()
+    mock_config.base_dir = tmp_path / "worktrees"
+    mock_config.tmux_split = "vertical"
+    mock_config.tmux_claude_pane = "left"
+    mock_config.claude_args = ""
+
+    with patch("womtrees.cli.get_connection", get_conn_fn), \
+         patch("womtrees.cli.get_current_repo", return_value=("myrepo", "/tmp/myrepo")), \
+         patch("womtrees.cli.get_config", return_value=mock_config), \
+         patch("womtrees.cli.create_worktree", return_value=tmp_path / "worktrees" / "myrepo" / "feat-x"), \
+         patch("womtrees.tmux.is_available", return_value=True), \
+         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")), \
+         patch("womtrees.tmux.set_environment"), \
+         patch("womtrees.tmux.split_pane", return_value="%1"), \
+         patch("womtrees.tmux.swap_pane"), \
+         patch("womtrees.tmux.send_keys") as mock_send_keys, \
+         patch("womtrees.tmux.session_exists", return_value=True), \
+         patch("womtrees.tmux.attach"), \
+         patch("womtrees.claude.is_pid_alive", return_value=True):
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+        runner.invoke(cli, ["start", "1"])
+
+        mock_send_keys.reset_mock()
+
+        result = runner.invoke(cli, ["attach", "1"])
+        assert result.exit_code == 0
+
+        # Should NOT have sent any resume command
+        mock_send_keys.assert_not_called()
