@@ -55,11 +55,46 @@ def list_cmd() -> None:
         )
 
 
+def _format_tmux_status(conn) -> str:
+    """Format a compact status string for tmux status-right."""
+    sessions = list_claude_sessions(conn, state="waiting")
+    if not sessions:
+        return "wt: 0"
+
+    branches = []
+    for s in sessions:
+        # Use short branch name (strip common prefixes)
+        branch = s.branch
+        branches.append(branch)
+
+    # Build output, truncating to fit ~60 chars
+    count = len(branches)
+    max_len = 50  # leave room for "wt: N waiting []"
+    shown: list[str] = []
+    used = 0
+    for b in branches:
+        entry_len = len(b) + (2 if shown else 0)  # ", " separator
+        if used + entry_len > max_len:
+            remaining = count - len(shown)
+            shown.append(f"+{remaining}")
+            break
+        shown.append(b)
+        used += entry_len
+
+    return f"wt: {count} waiting [{', '.join(shown)}]"
+
+
 @click.command()
 @click.argument("item_id", type=int, required=False)
-def status(item_id: int | None) -> None:
+@click.option("--tmux", "tmux_mode", is_flag=True, help="Compact output for tmux status bar.")
+def status(item_id: int | None, tmux_mode: bool) -> None:
     """Show status of work items."""
     conn = get_connection()
+
+    if tmux_mode:
+        click.echo(_format_tmux_status(conn))
+        conn.close()
+        return
 
     if item_id is not None:
         item = get_work_item(conn, item_id)
