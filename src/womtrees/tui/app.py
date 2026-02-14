@@ -339,7 +339,7 @@ class WomtreesApp(App):
 
         repo_name, repo_path = self.repo_context
         conn = get_connection()
-        item = create_work_item(conn, repo_name, repo_path, result["branch"], result["prompt"])
+        item = create_work_item(conn, repo_name, repo_path, result["branch"], result["prompt"], name=result.get("name"))
 
         if result["mode"] == "create":
             config = get_config()

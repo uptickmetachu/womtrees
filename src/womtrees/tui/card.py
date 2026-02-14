@@ -94,6 +94,8 @@ class WorkItemCard(Widget, can_focus=True):
             yield Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
 
     def _render_title(self) -> str:
+        if self.work_item.name:
+            return f"#{self.work_item.id} {self.work_item.name} ({self.work_item.branch})"
         return f"#{self.work_item.id} {self.work_item.branch}"
 
 

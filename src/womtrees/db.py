@@ -7,7 +7,7 @@ from pathlib import Path
 from womtrees.config import get_config
 from womtrees.models import ClaudeSession, WorkItem
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS work_items (
     repo_name TEXT NOT NULL,
     repo_path TEXT NOT NULL,
     branch TEXT NOT NULL,
+    name TEXT,
     prompt TEXT,
     worktree_path TEXT,
     tmux_session TEXT,
@@ -72,6 +73,7 @@ MIGRATIONS = {
         "CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state)",
     ],
     4: ["ALTER TABLE claude_sessions ADD COLUMN claude_session_id TEXT"],
+    5: ["ALTER TABLE work_items ADD COLUMN name TEXT"],
 }
 
 
@@ -85,6 +87,7 @@ def _row_to_work_item(row: sqlite3.Row) -> WorkItem:
         repo_name=row["repo_name"],
         repo_path=row["repo_path"],
         branch=row["branch"],
+        name=row["name"],
         prompt=row["prompt"],
         worktree_path=row["worktree_path"],
         tmux_session=row["tmux_session"],
@@ -156,12 +159,13 @@ def create_work_item(
     branch: str,
     prompt: str | None = None,
     status: str = "todo",
+    name: str | None = None,
 ) -> WorkItem:
     now = _now()
     cursor = conn.execute(
-        """INSERT INTO work_items (repo_name, repo_path, branch, prompt, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (repo_name, repo_path, branch, prompt, status, now, now),
+        """INSERT INTO work_items (repo_name, repo_path, branch, name, prompt, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (repo_name, repo_path, branch, name, prompt, status, now, now),
     )
     conn.commit()
     return get_work_item(conn, cursor.lastrowid)

@@ -9,6 +9,7 @@ class WorkItem:
     repo_name: str
     repo_path: str
     branch: str
+    name: str | None
     prompt: str | None
     worktree_path: str | None
     tmux_session: str | None
