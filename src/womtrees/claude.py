@@ -35,6 +35,26 @@ WOMTREE_HOOKS = {
         ],
         "Notification": [
             {
+                "matcher": "permission_prompt",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "wt hook input",
+                    }
+                ],
+            },
+            {
+                "matcher": "elicitation_dialog",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "wt hook input",
+                    }
+                ],
+            },
+        ],
+        "PermissionRequest": [
+            {
                 "matcher": "",
                 "hooks": [
                     {
