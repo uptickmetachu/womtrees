@@ -21,7 +21,7 @@ from womtrees.db import (
 from womtrees.tui.board import KanbanBoard
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 from womtrees.tui.column import KanbanColumn
-from womtrees.tui.dialogs import CreateDialog, DeleteDialog, HelpDialog, MergeDialog
+from womtrees.tui.dialogs import CreateDialog, DeleteDialog, HelpDialog, MergeDialog, RebaseDialog
 from womtrees.worktree import get_current_repo
 
 
@@ -406,7 +406,7 @@ class WomtreesApp(App):
             return
 
         from womtrees import tmux
-        from womtrees.worktree import merge_branch, remove_worktree
+        from womtrees.worktree import RebaseRequiredError, merge_branch, remove_worktree
 
         conn = get_connection()
         item = get_work_item(conn, item_id)
@@ -416,6 +416,17 @@ class WomtreesApp(App):
 
         try:
             merge_branch(item.repo_path, item.branch)
+        except RebaseRequiredError as e:
+            conn.close()
+            msg = (
+                f"Cannot merge #{item_id} ({e.branch}).\n"
+                f"Branch is behind {e.default_branch} and needs a rebase."
+            )
+            self.push_screen(
+                RebaseDialog(msg),
+                lambda confirmed: self._on_rebase_confirmed(confirmed, item_id),
+            )
+            return
         except subprocess.CalledProcessError as e:
             conn.close()
             self.notify(f"Merge failed: {e.stderr.strip()}", severity="error")
@@ -447,6 +458,28 @@ class WomtreesApp(App):
         conn.close()
         self.notify(f"#{item_id} merged and done")
         self._refresh_board()
+
+    def _on_rebase_confirmed(self, confirmed: bool, item_id: int) -> None:
+        if not confirmed:
+            return
+
+        from womtrees.worktree import rebase_branch
+
+        conn = get_connection()
+        item = get_work_item(conn, item_id)
+        if item is None:
+            conn.close()
+            return
+
+        try:
+            rebase_branch(item.repo_path, item.branch)
+        except subprocess.CalledProcessError as e:
+            conn.close()
+            self.notify(f"Rebase failed: {e.stderr.strip()}", severity="error")
+            return
+
+        conn.close()
+        self.notify(f"#{item_id} rebased — press [m] to merge")
 
     def action_delete_item(self) -> None:
         card = self._get_focused_card()

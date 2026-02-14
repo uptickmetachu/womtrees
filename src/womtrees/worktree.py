@@ -129,13 +129,71 @@ def get_default_branch(repo_path: str) -> str:
     return "main"
 
 
+class RebaseRequiredError(Exception):
+    """Raised when a branch needs rebasing before it can be merged."""
+
+    def __init__(self, branch: str, default_branch: str) -> None:
+        self.branch = branch
+        self.default_branch = default_branch
+        super().__init__(
+            f"Branch '{branch}' needs rebase onto '{default_branch}'"
+        )
+
+
+def needs_rebase(repo_path: str, branch: str) -> bool:
+    """Check if a branch needs rebasing onto the default branch.
+
+    Returns True if the default branch has commits not in the feature branch,
+    meaning a rebase is required before merging.
+    """
+    default_branch = get_default_branch(repo_path)
+
+    # Fetch latest refs so the check is up-to-date
+    subprocess.run(
+        ["git", "-C", repo_path, "fetch", "--quiet"],
+        capture_output=True,
+        text=True,
+    )
+
+    # Check if default_branch is an ancestor of the feature branch.
+    # If it is NOT an ancestor, the feature branch is behind and needs rebase.
+    result = subprocess.run(
+        ["git", "-C", repo_path, "merge-base", "--is-ancestor", default_branch, branch],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode != 0
+
+
+def rebase_branch(repo_path: str, branch: str) -> str:
+    """Rebase a branch onto the default branch.
+
+    Returns the rebase output message.
+    Raises subprocess.CalledProcessError on conflict or failure.
+    """
+    default_branch = get_default_branch(repo_path)
+
+    result = subprocess.run(
+        ["git", "-C", repo_path, "rebase", default_branch, branch],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout.strip()
+
+
 def merge_branch(repo_path: str, branch: str) -> str:
     """Merge a branch into the default branch from the main repo.
 
     Returns the merge output message.
+    Raises RebaseRequiredError if the branch needs rebasing first.
     Raises subprocess.CalledProcessError on conflict or failure.
     """
     default_branch = get_default_branch(repo_path)
+
+    if needs_rebase(repo_path, branch):
+        raise RebaseRequiredError(branch, default_branch)
 
     # Checkout default branch in the main repo
     subprocess.run(
