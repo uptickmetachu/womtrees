@@ -21,6 +21,8 @@ packages = ["src/womtrees"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.19.1",
     "pytest",
     "pytest-asyncio",
+    "ruff>=0.15.1",
 ]

@@ -12,6 +12,8 @@ DEFAULT_BASE_DIR = Path.home() / ".local" / "share" / "womtrees"
 DEFAULT_CONFIG = """\
 [worktrees]
 base_dir = "~/.local/share/womtrees"
+# Prefix for auto-generated branch names (e.g. "np-01/my-feature")
+branch_prefix = "np-01"
 
 [tmux]
 split = "vertical"
@@ -30,6 +32,7 @@ class Config:
     tmux_split: str  # vertical | horizontal
     tmux_claude_pane: str  # left | right | top | bottom
     claude_args: str  # extra CLI args for claude
+    branch_prefix: str  # prefix for auto-generated branch names
 
     @classmethod
     def load(cls) -> Config:
@@ -49,11 +52,14 @@ class Config:
         claude = data.get("claude", {})
         claude_args = claude.get("args", "")
 
+        branch_prefix = worktrees.get("branch_prefix", "np-01")
+
         return cls(
             base_dir=base_dir,
             tmux_split=tmux_split,
             tmux_claude_pane=tmux_claude_pane,
             claude_args=claude_args,
+            branch_prefix=branch_prefix,
         )
 
 
