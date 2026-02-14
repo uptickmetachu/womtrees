@@ -115,6 +115,86 @@ class TestClaudeStateMapping:
 
 # -- Async TUI tests --
 
+class TestCheckRefresh:
+    """Tests for the DB-mtime-based refresh trigger."""
+
+    @pytest.mark.asyncio
+    async def test_skips_when_db_missing(self):
+        """_check_refresh does nothing when DB file doesn't exist."""
+        from womtrees.tui.app import WomtreesApp
+
+        with patch("womtrees.tui.app.get_connection") as mock_conn, \
+             patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+            conn = MagicMock()
+            mock_conn.return_value = conn
+
+            with patch("womtrees.tui.app.list_work_items", return_value=[]), \
+                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
+                app = WomtreesApp()
+                async with app.run_test(size=(120, 40)) as pilot:
+                    # Point at a nonexistent file
+                    from pathlib import Path
+                    app._db_path = Path("/tmp/nonexistent-womtrees-test.db")
+                    call_count_before = mock_conn.call_count
+                    app._check_refresh()
+                    # Should not have triggered another refresh
+                    assert mock_conn.call_count == call_count_before
+
+    @pytest.mark.asyncio
+    async def test_skips_when_mtime_unchanged(self, tmp_path):
+        """_check_refresh skips refresh when mtime hasn't changed."""
+        from womtrees.tui.app import WomtreesApp
+
+        db_file = tmp_path / "womtrees.db"
+        db_file.write_text("fake")
+
+        with patch("womtrees.tui.app.get_connection") as mock_conn, \
+             patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+            conn = MagicMock()
+            mock_conn.return_value = conn
+
+            with patch("womtrees.tui.app.list_work_items", return_value=[]), \
+                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
+                app = WomtreesApp()
+                async with app.run_test(size=(120, 40)) as pilot:
+                    app._db_path = db_file
+                    app._last_db_mtime = db_file.stat().st_mtime
+                    call_count_before = mock_conn.call_count
+                    app._check_refresh()
+                    # mtime unchanged, no new refresh
+                    assert mock_conn.call_count == call_count_before
+
+    @pytest.mark.asyncio
+    async def test_refreshes_when_mtime_changes(self, tmp_path):
+        """_check_refresh triggers refresh when mtime changes."""
+        from womtrees.tui.app import WomtreesApp
+        import time
+
+        db_file = tmp_path / "womtrees.db"
+        db_file.write_text("v1")
+
+        with patch("womtrees.tui.app.get_connection") as mock_conn, \
+             patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+            conn = MagicMock()
+            mock_conn.return_value = conn
+
+            with patch("womtrees.tui.app.list_work_items", return_value=[]), \
+                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
+                app = WomtreesApp()
+                async with app.run_test(size=(120, 40)) as pilot:
+                    app._db_path = db_file
+                    app._last_db_mtime = db_file.stat().st_mtime
+                    call_count_before = mock_conn.call_count
+
+                    # Modify the file to change mtime
+                    time.sleep(0.05)
+                    db_file.write_text("v2")
+
+                    app._check_refresh()
+                    # Should have triggered a refresh (new get_connection call)
+                    assert mock_conn.call_count > call_count_before
+
+
 @pytest.mark.asyncio
 async def test_app_mounts():
     """App should mount with board, status bar, header, and footer."""
