@@ -210,6 +210,76 @@ def _maybe_resume_claude(conn, item_id: int) -> None:
 
 
 @click.command()
+@click.argument(
+    "filter",
+    type=click.Choice(["input", "review", "all"], case_sensitive=False),
+    default="all",
+)
+def cycle(filter: str) -> None:
+    """Cycle through tmux sessions managed by womtrees.
+
+    Switches to the next work item's tmux session matching FILTER.
+
+    \b
+    FILTER values:
+      input   — only items waiting for user input
+      review  — only items in review
+      all     — all active items (excludes done)
+    """
+    from womtrees import tmux
+
+    conn = get_connection()
+
+    # Gather matching work items with live tmux sessions
+    if filter == "all":
+        items = [
+            i
+            for i in list_work_items(conn)
+            if i.status != "done" and i.tmux_session and tmux.session_exists(i.tmux_session)
+        ]
+    else:
+        items = [
+            i
+            for i in list_work_items(conn, status=filter)
+            if i.tmux_session and tmux.session_exists(i.tmux_session)
+        ]
+
+    conn.close()
+
+    if not items:
+        raise click.ClickException(f"No active tmux sessions matching '{filter}'.")
+
+    # Determine current tmux session (if inside tmux)
+    import os
+
+    current_session = None
+    if os.environ.get("TMUX"):
+        try:
+            result = subprocess.run(
+                ["tmux", "display-message", "-p", "#{session_name}"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                current_session = result.stdout.strip()
+        except FileNotFoundError:
+            pass
+
+    # Find the next session to switch to
+    session_names = [i.tmux_session for i in items]
+
+    if current_session in session_names:
+        idx = session_names.index(current_session)
+        next_session = session_names[(idx + 1) % len(session_names)]
+    else:
+        next_session = session_names[0]
+
+    # Type narrowing: next_session is guaranteed non-None from the filter above
+    assert next_session is not None
+    tmux.attach(next_session)
+
+
+@click.command()
 @click.argument("item_id", type=int)
 @click.option(
     "--session",
