@@ -363,29 +363,35 @@ async def test_app_show_all_flag():
 
 @pytest.mark.asyncio
 async def test_app_column_navigation():
-    """h/l keys should change active column index."""
+    """h/l keys should navigate between columns with cards."""
     from womtrees.tui.app import WomtreesApp
+
+    items = [
+        _make_item(id=1, status="todo", branch="feat/a"),
+        _make_item(id=2, status="working", branch="feat/b"),
+        _make_item(id=3, status="review", branch="feat/c"),
+    ]
 
     with patch("womtrees.tui.app.get_connection") as mock_conn, \
          patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
         conn = MagicMock()
         mock_conn.return_value = conn
 
-        with patch("womtrees.tui.app.list_work_items", return_value=[]):
+        with patch("womtrees.tui.app.list_work_items", return_value=items):
             with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
                 app = WomtreesApp()
                 async with app.run_test(size=(120, 40)) as pilot:
                     assert app.active_column_idx == 0
                     await pilot.press("l")
-                    assert app.active_column_idx == 1
+                    assert app.active_column_idx == 1  # working
                     await pilot.press("l")
-                    assert app.active_column_idx == 2
+                    assert app.active_column_idx == 3  # review (skips empty input)
                     await pilot.press("h")
-                    assert app.active_column_idx == 1
-                    # Can't go below 0
+                    assert app.active_column_idx == 1  # working (skips empty input)
                     await pilot.press("h")
+                    assert app.active_column_idx == 0  # todo
                     await pilot.press("h")
-                    assert app.active_column_idx == 0
+                    assert app.active_column_idx == 0  # stays at 0
 
 
 @pytest.mark.asyncio
