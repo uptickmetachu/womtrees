@@ -469,8 +469,8 @@ class ClaudeStreamDialog(ModalScreen[dict[str, Any] | None]):
         self._prompt = prompt
         self._cwd = cwd
         self._on_result = on_result
-        self._session: Any = None
         self._finished = False
+        self._cancelled = False
         self._result: dict[str, Any] | None = None
 
     def compose(self) -> ComposeResult:
@@ -486,28 +486,55 @@ class ClaudeStreamDialog(ModalScreen[dict[str, Any] | None]):
 
     async def _run_stream(self) -> None:
         from womtrees.claude import (
-            ClaudeCancelledError,
             ClaudeResultEvent,
             ClaudeTextEvent,
             ClaudeToolEvent,
-            start_claude_session,
+            stream_claude_events,
         )
 
         log = self.query_one("#stream-log", RichLog)
         status = self.query_one("#status-label", Label)
 
-        self._session = start_claude_session(
-            prompt=self._prompt,
-            cwd=self._cwd,
-        )
+        text_buf = ""
 
         try:
-            async for event in self._session.events:
+            async for event in stream_claude_events(
+                prompt=self._prompt,
+                cwd=self._cwd,
+            ):
+                if self._cancelled:
+                    break
                 if isinstance(event, ClaudeTextEvent):
-                    log.write(event.text)
+                    text_buf += event.text
+                    # Flush complete lines, keep partial tail in buffer
+                    while "\n" in text_buf:
+                        line, text_buf = text_buf.split("\n", 1)
+                        log.write(line)
                 elif isinstance(event, ClaudeToolEvent):
-                    log.write(f"\n[dim]▶ Tool: {event.tool_name}[/dim]")
+                    if text_buf:
+                        log.write(text_buf)
+                        text_buf = ""
+                    detail = ""
+                    inp = event.tool_input
+                    if event.tool_name == "Bash" and inp.get("command"):
+                        detail = f"  $ {inp['command']}"
+                    elif event.tool_name == "Read" and inp.get("file_path"):
+                        detail = f"  {inp['file_path']}"
+                    elif event.tool_name == "Write" and inp.get("file_path"):
+                        detail = f"  {inp['file_path']}"
+                    elif event.tool_name == "Edit" and inp.get("file_path"):
+                        detail = f"  {inp['file_path']}"
+                    elif event.tool_name == "Glob" and inp.get("pattern"):
+                        detail = f"  {inp['pattern']}"
+                    elif event.tool_name == "Grep" and inp.get("pattern"):
+                        detail = f"  /{inp['pattern']}/"
+                    elif event.tool_name == "Skill" and inp.get("skill"):
+                        detail = f"  /{inp['skill']}"
+                    log.write(f"[dim]▶ {event.tool_name}{detail}[/dim]")
                 elif isinstance(event, ClaudeResultEvent):
+                    if text_buf:
+                        log.write(text_buf)
+                        text_buf = ""
                     self._finished = True
                     cost = f" (${event.cost_usd:.4f})" if event.cost_usd else ""
                     if event.is_error:
@@ -520,12 +547,15 @@ class ClaudeStreamDialog(ModalScreen[dict[str, Any] | None]):
                             self._result = self._on_result()
                         except Exception:
                             pass
-        except ClaudeCancelledError:
-            status.update("[yellow]Cancelled[/yellow]")
-            self._finished = True
-            self._swap_to_close_button()
+            if text_buf:
+                log.write(text_buf)
         except Exception as exc:
             status.update(f"[red]Error: {exc}[/red]")
+            self._finished = True
+            self._swap_to_close_button()
+
+        if self._cancelled and not self._finished:
+            status.update("[yellow]Cancelled[/yellow]")
             self._finished = True
             self._swap_to_close_button()
 
@@ -533,25 +563,19 @@ class ClaudeStreamDialog(ModalScreen[dict[str, Any] | None]):
         btn = self.query_one("#cancel-btn", Button)
         btn.label = "Close"
         btn.variant = "primary"
-        btn.id = "close-btn"
-
-    async def _do_cancel(self) -> None:
-        if self._session is not None and not self._finished:
-            status = self.query_one("#status-label", Label)
-            status.update("[yellow]Cancelling...[/yellow]")
-            await self._session.cancel()
 
     def action_cancel_or_close(self) -> None:
         if self._finished:
             self.dismiss(self._result)
         else:
-            self.run_worker(self._do_cancel(), exclusive=True)
+            self._cancelled = True
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel-btn":
-            self.run_worker(self._do_cancel(), exclusive=True)
-        elif event.button.id == "close-btn":
-            self.dismiss(self._result)
+            if self._finished:
+                self.dismiss(self._result)
+            else:
+                self._cancelled = True
 
 
 class HelpDialog(ModalScreen):
