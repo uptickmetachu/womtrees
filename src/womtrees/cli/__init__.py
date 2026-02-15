@@ -12,6 +12,7 @@ from womtrees.cli.admin import board, config, sqlite_cmd
 from womtrees.cli.hooks import hook
 from womtrees.cli.info import (
     _maybe_resume_claude,
+    _restore_tmux_session,
     attach,
     cycle,
     list_cmd,
@@ -58,4 +59,4 @@ cli.add_command(sqlite_cmd)
 cli.add_command(config)
 
 # Re-export for backward compatibility (used by TUI)
-__all__ = ["cli", "_start_work_item", "_maybe_resume_claude"]
+__all__ = ["cli", "_start_work_item", "_maybe_resume_claude", "_restore_tmux_session"]
