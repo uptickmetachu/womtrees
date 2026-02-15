@@ -31,7 +31,7 @@ def test_status_tmux_no_waiting(tmp_path):
     get_conn = _make_conn(tmp_path)
     runner = CliRunner()
 
-    with patch("womtrees.cli.info.get_connection", get_conn):
+    with patch("womtrees.db.get_connection", get_conn):
         result = runner.invoke(cli, ["status", "--tmux"])
 
     assert result.exit_code == 0
@@ -53,7 +53,7 @@ def test_status_tmux_one_waiting(tmp_path):
     conn.close()
 
     runner = CliRunner()
-    with patch("womtrees.cli.info.get_connection", get_conn):
+    with patch("womtrees.db.get_connection", get_conn):
         result = runner.invoke(cli, ["status", "--tmux"])
 
     assert result.exit_code == 0
@@ -77,7 +77,7 @@ def test_status_tmux_multiple_waiting(tmp_path):
     conn.close()
 
     runner = CliRunner()
-    with patch("womtrees.cli.info.get_connection", get_conn):
+    with patch("womtrees.db.get_connection", get_conn):
         result = runner.invoke(cli, ["status", "--tmux"])
 
     assert result.exit_code == 0
@@ -99,7 +99,7 @@ def test_status_tmux_ignores_working_sessions(tmp_path):
     conn.close()
 
     runner = CliRunner()
-    with patch("womtrees.cli.info.get_connection", get_conn):
+    with patch("womtrees.db.get_connection", get_conn):
         result = runner.invoke(cli, ["status", "--tmux"])
 
     assert result.exit_code == 0

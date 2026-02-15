@@ -1,17 +1,54 @@
-"""Work item editing operations that coordinate across DB, git, and tmux."""
+"""Work item lifecycle operations that coordinate across DB, git, and tmux."""
 
 from __future__ import annotations
 
 import sqlite3
+import subprocess
 
+from womtrees.config import Config
 from womtrees.db import (
+    create_claude_session,
+    create_work_item as db_create_work_item,
+    delete_work_item as db_delete_work_item,
+    get_work_item,
     list_claude_sessions,
     list_pull_requests,
     update_claude_session,
     update_work_item,
 )
 from womtrees.models import WorkItem
-from womtrees.worktree import rename_branch, sanitize_branch_name
+from womtrees.worktree import (
+    create_worktree,
+    remove_worktree,
+    rename_branch,
+    sanitize_branch_name,
+)
+
+
+# -- Exceptions --
+
+
+class WorkItemNotFoundError(Exception):
+    """Raised when a work item ID does not exist."""
+
+    def __init__(self, item_id: int) -> None:
+        self.item_id = item_id
+        super().__init__(f"WorkItem #{item_id} not found.")
+
+
+class InvalidStateError(Exception):
+    """Raised when a work item is in the wrong state for the requested transition."""
+
+    def __init__(
+        self, item_id: int, current: str, expected: str | tuple[str, ...]
+    ) -> None:
+        self.item_id = item_id
+        self.current = current
+        self.expected = expected if isinstance(expected, tuple) else (expected,)
+        exp = " or ".join(f"'{s}'" for s in self.expected)
+        super().__init__(
+            f"Cannot transition #{item_id}: status is '{current}' (expected {exp})."
+        )
 
 
 class DuplicateBranchError(Exception):
@@ -34,6 +71,215 @@ class OpenPullRequestError(Exception):
         super().__init__(
             f"Cannot rename branch: WorkItem #{item_id} has open PR #{pr_number}."
         )
+
+
+# -- Service functions --
+
+
+def _get_item_or_raise(conn: sqlite3.Connection, item_id: int) -> WorkItem:
+    """Fetch a work item or raise WorkItemNotFoundError."""
+    item = get_work_item(conn, item_id)
+    if item is None:
+        raise WorkItemNotFoundError(item_id)
+    return item
+
+
+def create_work_item_todo(
+    conn: sqlite3.Connection,
+    repo_name: str,
+    repo_path: str,
+    branch: str,
+    prompt: str | None = None,
+    name: str | None = None,
+) -> WorkItem:
+    """Create a TODO work item (queued for later).
+
+    Raises ValueError if the branch already has an active work item.
+    """
+    return db_create_work_item(
+        conn, repo_name, repo_path, branch, prompt, status="todo", name=name
+    )
+
+
+def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> WorkItem:
+    """Start a TODO work item: create worktree + tmux session + Claude.
+
+    Returns the updated WorkItem.
+    Raises WorkItemNotFoundError if the item doesn't exist.
+    Raises InvalidStateError if the item isn't in 'todo' state.
+    """
+    from womtrees import tmux
+
+    item = _get_item_or_raise(conn, item_id)
+    if item.status != "todo":
+        raise InvalidStateError(item_id, item.status, "todo")
+
+    if not tmux.is_available():
+        raise RuntimeError("tmux is required. Install it with: brew install tmux")
+
+    # Create worktree
+    wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
+
+    # Persist worktree_path immediately so delete can clean up on failure
+    update_work_item(conn, item_id, worktree_path=str(wt_path))
+
+    try:
+        # Create tmux session
+        session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
+        session_name, shell_pane_id = tmux.create_session(session_name, str(wt_path))
+
+        # Set environment variable for Claude hook detection
+        tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
+
+        # Split pane: creates a second pane for Claude
+        claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
+
+        # If Claude pane should be on the left/top, swap so it comes first visually
+        if config.tmux_claude_pane in ("left", "top"):
+            tmux.swap_pane(session_name)
+
+        # Launch Claude using the pane ID (immune to base-index settings)
+        claude_cmd = "claude"
+        if config.claude_args:
+            claude_cmd += f" {config.claude_args}"
+        if item.prompt:
+            escaped_prompt = item.prompt.replace("'", "'\\''")
+            claude_cmd += f" '{escaped_prompt}'"
+        tmux.send_keys(claude_pane_id, claude_cmd)
+
+        # Create a ClaudeSession record
+        create_claude_session(
+            conn,
+            repo_name=item.repo_name,
+            repo_path=item.repo_path,
+            branch=item.branch,
+            tmux_session=session_name,
+            tmux_pane=claude_pane_id,
+            work_item_id=item_id,
+            state="working",
+            prompt=item.prompt,
+        )
+
+        updated = update_work_item(
+            conn,
+            item_id,
+            status="working",
+            worktree_path=str(wt_path),
+            tmux_session=session_name,
+        )
+        return updated  # type: ignore[return-value]
+    except Exception:
+        # Clean up on failure: remove worktree and kill tmux session if created
+        try:
+            remove_worktree(wt_path)
+        except Exception:
+            pass
+        try:
+            tmux.kill_session(session_name)
+        except Exception:
+            pass
+        update_work_item(conn, item_id, worktree_path=None)
+        raise
+
+
+def review_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem:
+    """Move a work item to review.
+
+    Raises WorkItemNotFoundError, InvalidStateError.
+    """
+    item = _get_item_or_raise(conn, item_id)
+    if item.status not in ("working", "input"):
+        raise InvalidStateError(item_id, item.status, ("working", "input"))
+    updated = update_work_item(conn, item_id, status="review")
+    return updated  # type: ignore[return-value]
+
+
+def done_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem:
+    """Mark a work item as done.
+
+    Raises WorkItemNotFoundError, InvalidStateError.
+    """
+    item = _get_item_or_raise(conn, item_id)
+    if item.status not in ("working", "input", "review"):
+        raise InvalidStateError(item_id, item.status, ("working", "input", "review"))
+    updated = update_work_item(conn, item_id, status="done")
+    return updated  # type: ignore[return-value]
+
+
+def delete_work_item(
+    conn: sqlite3.Connection,
+    item_id: int,
+    *,
+    force: bool = False,
+) -> None:
+    """Delete a work item and clean up its worktree/tmux session.
+
+    Raises WorkItemNotFoundError if the item doesn't exist.
+    Raises InvalidStateError if the item is 'working' and force=False.
+    """
+    from womtrees import tmux
+
+    item = _get_item_or_raise(conn, item_id)
+
+    if item.status == "working" and not force:
+        raise InvalidStateError(
+            item_id, item.status, ("todo", "input", "review", "done")
+        )
+
+    # Kill tmux session if it exists
+    if item.tmux_session and tmux.session_exists(item.tmux_session):
+        tmux.kill_session(item.tmux_session)
+
+    if item.worktree_path:
+        try:
+            remove_worktree(item.worktree_path)
+        except subprocess.CalledProcessError:
+            pass  # Best effort
+
+    db_delete_work_item(conn, item_id)
+
+
+def merge_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem:
+    """Merge a review item's branch and mark as done.
+
+    Performs: merge branch, kill tmux, remove worktree, delete branch, mark done.
+    Raises WorkItemNotFoundError, InvalidStateError.
+    Re-raises RebaseRequiredError, subprocess.CalledProcessError from worktree.
+    """
+    from womtrees import tmux
+    from womtrees.worktree import merge_branch
+
+    item = _get_item_or_raise(conn, item_id)
+    if item.status != "review":
+        raise InvalidStateError(item_id, item.status, "review")
+
+    # This may raise RebaseRequiredError or CalledProcessError
+    merge_branch(item.repo_path, item.branch)
+
+    # Clean up tmux session
+    if item.tmux_session and tmux.session_exists(item.tmux_session):
+        tmux.kill_session(item.tmux_session)
+
+    # Clean up worktree
+    if item.worktree_path:
+        try:
+            remove_worktree(item.worktree_path)
+        except subprocess.CalledProcessError:
+            pass
+
+    # Delete the branch after merge
+    try:
+        subprocess.run(
+            ["git", "-C", item.repo_path, "branch", "-d", item.branch],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        pass
+
+    updated = update_work_item(conn, item_id, status="done")
+    return updated  # type: ignore[return-value]
 
 
 def edit_work_item(

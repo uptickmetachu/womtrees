@@ -1,27 +1,23 @@
 from __future__ import annotations
 
-import subprocess
-
 import click
 
 from womtrees.config import get_config
 from womtrees.db import (
-    create_claude_session,
-    create_work_item,
-    delete_work_item,
-    get_connection,
+    connection,
     get_work_item,
-    update_work_item,
 )
 from womtrees.services.workitem import (
     DuplicateBranchError,
+    InvalidStateError,
     OpenPullRequestError,
+    WorkItemNotFoundError,
+    create_work_item_todo,
+    delete_work_item,
+    done_work_item,
     edit_work_item,
-)
-from womtrees.worktree import (
-    create_worktree,
-    remove_worktree,
-    sanitize_branch_name,
+    review_work_item,
+    start_work_item,
 )
 
 from womtrees.cli.utils import (
@@ -68,15 +64,13 @@ def todo(
         branch = f"{config.branch_prefix}/{slug}"
 
     repo_name, resolved_path = _resolve_repo(repo_path)
-    conn = get_connection()
-    try:
-        item = create_work_item(
-            conn, repo_name, resolved_path, branch, prompt, status="todo", name=name
-        )
-    except ValueError as e:
-        conn.close()
-        raise click.ClickException(str(e))
-    conn.close()
+    with connection() as conn:
+        try:
+            item = create_work_item_todo(
+                conn, repo_name, resolved_path, branch, prompt, name=name
+            )
+        except ValueError as e:
+            raise click.ClickException(str(e))
     click.echo(f"Created TODO #{item.id}: {branch}")
 
 
@@ -116,17 +110,19 @@ def create(
         branch = f"{config.branch_prefix}/{slug}"
 
     repo_name, resolved_path = _resolve_repo(repo_path)
-    conn = get_connection()
+    with connection() as conn:
+        try:
+            item = create_work_item_todo(
+                conn, repo_name, resolved_path, branch, prompt, name=name
+            )
+        except ValueError as e:
+            raise click.ClickException(str(e))
 
-    try:
-        item = create_work_item(
-            conn, repo_name, resolved_path, branch, prompt, status="todo", name=name
-        )
-    except ValueError as e:
-        conn.close()
-        raise click.ClickException(str(e))
-    _start_work_item(conn, item.id, config)
-    conn.close()
+        try:
+            start_work_item(conn, item.id, config)
+            click.echo(f"Started #{item.id} in worktree")
+        except Exception as e:
+            raise click.ClickException(str(e))
 
 
 @click.command()
@@ -134,130 +130,38 @@ def create(
 def start(item_id: int) -> None:
     """Launch a TODO work item (create worktree and start working)."""
     config = get_config()
-    conn = get_connection()
-    _start_work_item(conn, item_id, config)
-    conn.close()
-
-
-def _start_work_item(conn, item_id: int, config) -> None:
-    """Shared logic for starting a work item: create worktree + tmux session + Claude."""
-    from womtrees import tmux
-
-    item = get_work_item(conn, item_id)
-    if item is None:
-        raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if item.status != "todo":
-        raise click.ClickException(
-            f"Cannot start #{item_id}, status is '{item.status}' (expected 'todo')."
-        )
-
-    if not tmux.is_available():
-        raise click.ClickException(
-            "tmux is required. Install it with: brew install tmux"
-        )
-
-    # Create worktree
-    wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
-
-    # Persist worktree_path immediately so delete can clean up on failure
-    update_work_item(conn, item_id, worktree_path=str(wt_path))
-
-    try:
-        # Create tmux session
-        session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
-        session_name, shell_pane_id = tmux.create_session(session_name, str(wt_path))
-
-        # Set environment variable for Claude hook detection
-        tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
-
-        # Split pane: creates a second pane for Claude
-        claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
-
-        # If Claude pane should be on the left/top, swap so it comes first visually
-        if config.tmux_claude_pane in ("left", "top"):
-            tmux.swap_pane(session_name)
-
-        # Launch Claude using the pane ID (immune to base-index settings)
-        claude_cmd = "claude"
-        if config.claude_args:
-            claude_cmd += f" {config.claude_args}"
-        if item.prompt:
-            escaped_prompt = item.prompt.replace("'", "'\\''")
-            claude_cmd += f" '{escaped_prompt}'"
-        tmux.send_keys(claude_pane_id, claude_cmd)
-
-        # Create a ClaudeSession record
-        create_claude_session(
-            conn,
-            repo_name=item.repo_name,
-            repo_path=item.repo_path,
-            branch=item.branch,
-            tmux_session=session_name,
-            tmux_pane=claude_pane_id,
-            work_item_id=item_id,
-            state="working",
-            prompt=item.prompt,
-        )
-
-        update_work_item(
-            conn,
-            item_id,
-            status="working",
-            tmux_session=session_name,
-        )
-        click.echo(f"Started #{item_id} in tmux session '{session_name}'")
-    except Exception:
-        # Clean up on failure: remove worktree and kill tmux session if created
+    with connection() as conn:
         try:
-            remove_worktree(wt_path)
-        except Exception:
-            pass
-        try:
-            tmux.kill_session(session_name)
-        except Exception:
-            pass
-        update_work_item(conn, item_id, worktree_path=None)
-        raise
+            item = start_work_item(conn, item_id, config)
+            click.echo(f"Started #{item.id} in tmux session '{item.tmux_session}'")
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            raise click.ClickException(str(e))
+        except Exception as e:
+            raise click.ClickException(str(e))
 
 
 @click.command()
 @click.argument("item_id", type=int)
 def review(item_id: int) -> None:
     """Move a work item to review."""
-    conn = get_connection()
-    item = get_work_item(conn, item_id)
-    if item is None:
-        conn.close()
-        raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if item.status not in ("working", "input"):
-        conn.close()
-        raise click.ClickException(
-            f"Cannot review #{item_id}, status is '{item.status}' (expected 'working' or 'input')."
-        )
-
-    update_work_item(conn, item_id, status="review")
-    conn.close()
-    click.echo(f"#{item_id} moved to review")
+    with connection() as conn:
+        try:
+            review_work_item(conn, item_id)
+            click.echo(f"#{item_id} moved to review")
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            raise click.ClickException(str(e))
 
 
 @click.command()
 @click.argument("item_id", type=int)
 def done(item_id: int) -> None:
     """Move a work item to done."""
-    conn = get_connection()
-    item = get_work_item(conn, item_id)
-    if item is None:
-        conn.close()
-        raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if item.status not in ("working", "input", "review"):
-        conn.close()
-        raise click.ClickException(
-            f"Cannot mark #{item_id} done, status is '{item.status}' (expected 'working', 'input', or 'review')."
-        )
-
-    update_work_item(conn, item_id, status="done")
-    conn.close()
-    click.echo(f"#{item_id} marked as done")
+    with connection() as conn:
+        try:
+            done_work_item(conn, item_id)
+            click.echo(f"#{item_id} marked as done")
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            raise click.ClickException(str(e))
 
 
 @click.command()
@@ -265,40 +169,28 @@ def done(item_id: int) -> None:
 @click.option("--force", is_flag=True, help="Force delete an active work item.")
 def delete(item_id: int, force: bool) -> None:
     """Delete a work item and its worktree."""
-    from womtrees import tmux
+    with connection() as conn:
+        # Still need to fetch item for confirmation prompt
+        item = get_work_item(conn, item_id)
+        if item is None:
+            raise click.ClickException(f"WorkItem #{item_id} not found.")
 
-    conn = get_connection()
-    item = get_work_item(conn, item_id)
-    if item is None:
-        conn.close()
-        raise click.ClickException(f"WorkItem #{item_id} not found.")
+        if item.status == "working" and not force:
+            raise click.ClickException(
+                f"WorkItem #{item_id} is still working. Use --force to delete."
+            )
 
-    if item.status == "working" and not force:
-        conn.close()
-        raise click.ClickException(
-            f"WorkItem #{item_id} is still working. Use --force to delete."
-        )
+        if item.status in ("working", "done", "review"):
+            if not click.confirm(
+                f"Delete #{item_id} ({item.branch}, status={item.status})?"
+            ):
+                click.echo("Aborted.")
+                return
 
-    if item.status in ("working", "done", "review"):
-        if not click.confirm(
-            f"Delete #{item_id} ({item.branch}, status={item.status})?"
-        ):
-            conn.close()
-            click.echo("Aborted.")
-            return
-
-    # Kill tmux session if it exists
-    if item.tmux_session and tmux.session_exists(item.tmux_session):
-        tmux.kill_session(item.tmux_session)
-
-    if item.worktree_path:
         try:
-            remove_worktree(item.worktree_path)
-        except subprocess.CalledProcessError:
-            click.echo(f"Warning: Failed to remove worktree at {item.worktree_path}")
-
-    delete_work_item(conn, item_id)
-    conn.close()
+            delete_work_item(conn, item_id, force=force)
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            raise click.ClickException(str(e))
     click.echo(f"Deleted #{item_id}")
 
 
@@ -311,19 +203,16 @@ def edit(item_id: int, name: str | None, branch: str | None) -> None:
     if name is None and branch is None:
         raise click.ClickException("Provide --name and/or --branch.")
 
-    conn = get_connection()
-    item = get_work_item(conn, item_id)
-    if item is None:
-        conn.close()
-        raise click.ClickException(f"WorkItem #{item_id} not found.")
+    with connection() as conn:
+        item = get_work_item(conn, item_id)
+        if item is None:
+            raise click.ClickException(f"WorkItem #{item_id} not found.")
 
-    try:
-        changed = edit_work_item(conn, item, name=name, branch=branch)
-    except (DuplicateBranchError, OpenPullRequestError) as e:
-        conn.close()
-        raise click.ClickException(str(e))
+        try:
+            changed = edit_work_item(conn, item, name=name, branch=branch)
+        except (DuplicateBranchError, OpenPullRequestError) as e:
+            raise click.ClickException(str(e))
 
-    conn.close()
     if changed:
         click.echo(f"Updated #{item_id}")
     else:

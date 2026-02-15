@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -154,6 +156,18 @@ def _row_to_claude_session(row: sqlite3.Row) -> ClaudeSession:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+@contextmanager
+def connection(
+    db_path: Path | None = None,
+) -> Generator[sqlite3.Connection, None, None]:
+    """Context manager that opens and closes a DB connection."""
+    conn = get_connection(db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
