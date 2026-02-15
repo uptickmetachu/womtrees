@@ -242,16 +242,19 @@ def detect_context() -> dict:
         except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
             pass
 
-    # Get git info
+    # Get git info (resolve to main repo even when inside a worktree)
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
+            ["git", "rev-parse", "--git-common-dir"],
             capture_output=True,
             text=True,
             check=True,
         )
-        context["repo_path"] = result.stdout.strip()
-        context["repo_name"] = Path(context["repo_path"]).name
+        git_common_dir = Path(result.stdout.strip())
+        if not git_common_dir.is_absolute():
+            git_common_dir = (Path.cwd() / git_common_dir).resolve()
+        context["repo_path"] = str(git_common_dir.parent)
+        context["repo_name"] = git_common_dir.parent.name
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
