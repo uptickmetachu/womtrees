@@ -1,0 +1,31 @@
+[tools]
+python = { version = "3.12.1", venv = ".venv" }
+pre-commit = "3.8.0"
+uv = "0.7.10"
+
+[env]
+_.python.venv = { path = "{{config_root}}/.venv", create = true }
+
+[tasks.lint]
+description = "Run mypy and ruff checks"
+run = ["uv run mypy src/", "uv run ruff check ."]
+
+[tasks.format]
+description = "Run ruff formatting"
+run = "uv run ruff format ."
+
+[tasks."format:ci"]
+description = "Run ruff format in check-only mode"
+run = "uv run ruff format --check ."
+
+[tasks.test]
+description = "Run pytest"
+run = "uv run pytest"
+
+[tasks.install]
+description = "Install dependencies and set up pre-commit hooks"
+run = ["uv sync", "uv run pre-commit install --hook-type pre-commit --hook-type commit-msg"]
+
+[tasks.ci]
+description = "Run all checks (lint, format:ci, test)"
+depends = ["lint", "format:ci", "test"]
