@@ -12,6 +12,7 @@ from womtrees.db import (
     list_claude_sessions,
     list_work_items,
     update_claude_session,
+    update_work_item,
 )
 
 
@@ -86,7 +87,9 @@ def _format_tmux_status(conn) -> str:
 
 @click.command()
 @click.argument("item_id", type=int, required=False)
-@click.option("--tmux", "tmux_mode", is_flag=True, help="Compact output for tmux status bar.")
+@click.option(
+    "--tmux", "tmux_mode", is_flag=True, help="Compact output for tmux status bar."
+)
 def status(item_id: int | None, tmux_mode: bool) -> None:
     """Show status of work items."""
     conn = get_connection()
@@ -166,6 +169,23 @@ def sessions_cmd() -> None:
         )
 
 
+def _restore_tmux_session(conn, item) -> str:
+    """Recreate a missing tmux session for a work item.
+
+    Creates a new tmux session in the worktree directory, sets the
+    environment variable, and updates the DB. Returns the new session name.
+    """
+    from womtrees import tmux
+    from womtrees.worktree import sanitize_branch_name
+
+    working_dir = item.worktree_path or item.repo_path
+    session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
+    session_name, _pane_id = tmux.create_session(session_name, working_dir)
+    tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item.id))
+    update_work_item(conn, item.id, tmux_session=session_name)
+    return session_name
+
+
 def _maybe_resume_claude(conn, item_id: int) -> None:
     """If the Claude session for a work item is dead, relaunch it.
 
@@ -235,7 +255,9 @@ def cycle(filter: str) -> None:
         items = [
             i
             for i in list_work_items(conn)
-            if i.status != "done" and i.tmux_session and tmux.session_exists(i.tmux_session)
+            if i.status != "done"
+            and i.tmux_session
+            and tmux.session_exists(i.tmux_session)
         ]
     else:
         items = [
@@ -298,23 +320,30 @@ def attach(item_id: int, session_id: int | None) -> None:
     if item is None:
         conn.close()
         raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if not item.tmux_session:
-        conn.close()
-        raise click.ClickException(f"WorkItem #{item_id} has no tmux session.")
-    if not tmux.session_exists(item.tmux_session):
-        conn.close()
-        raise click.ClickException(
-            f"Tmux session '{item.tmux_session}' no longer exists."
-        )
+    if not item.tmux_session or not tmux.session_exists(item.tmux_session):
+        if not item.worktree_path and not item.repo_path:
+            conn.close()
+            raise click.ClickException(
+                f"WorkItem #{item_id} has no tmux session and no worktree path to restore into."
+            )
+        session_name = _restore_tmux_session(conn, item)
+        click.echo(f"Restored tmux session '{session_name}' for #{item_id}")
+        # Reload item with updated tmux_session
+        item = get_work_item(conn, item_id)
+        assert item is not None
 
     # Resume dead Claude session before attaching
     _maybe_resume_claude(conn, item_id)
+
+    # At this point tmux_session is guaranteed to exist
+    assert item.tmux_session is not None
+    tmux_session = item.tmux_session
 
     # If a specific Claude session is requested, select its pane
     if session_id is not None:
         session = get_claude_session(conn, session_id)
         if session and session.tmux_pane:
-            tmux.select_pane(item.tmux_session, session.tmux_pane)
+            tmux.select_pane(tmux_session, session.tmux_pane)
 
     conn.close()
-    tmux.attach(item.tmux_session)
+    tmux.attach(tmux_session)
