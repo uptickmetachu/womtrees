@@ -49,7 +49,7 @@ class KanbanColumn(VerticalScroll):
     def __init__(self, status: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self.status = status
-        self.cards: list[WorkItemCard | UnmanagedCard] = []
+        self.cards: list[WorkItemCard | UnmanagedCard | Static] = []
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -134,9 +134,9 @@ class KanbanColumn(VerticalScroll):
                 for s in repo_unmanaged:
                     by_branch.setdefault(s.branch, []).append(s)
                 for branch, branch_sessions in by_branch.items():
-                    card = UnmanagedCard(branch, branch_sessions)
-                    self.mount(card)
-                    self.cards.append(card)
+                    um_card = UnmanagedCard(branch, branch_sessions)
+                    self.mount(um_card)
+                    self.cards.append(um_card)
 
     def _mount_flat(
         self,
@@ -150,18 +150,18 @@ class KanbanColumn(VerticalScroll):
             sessions = sessions_by_item.get(item.id, [])
             item_prs = (prs_by_item or {}).get(item.id, [])
             stats = git_stats.get(item.id) if git_stats else None
-            card = WorkItemCard(item, sessions, item_prs, git_stats=stats)
-            self.mount(card)
-            self.cards.append(card)
+            wi_card = WorkItemCard(item, sessions, item_prs, git_stats=stats)
+            self.mount(wi_card)
+            self.cards.append(wi_card)
 
         if unmanaged_sessions:
             by_branch: dict[str, list[ClaudeSession]] = {}
             for s in unmanaged_sessions:
                 by_branch.setdefault(s.branch, []).append(s)
             for branch, branch_sessions in by_branch.items():
-                card = UnmanagedCard(branch, branch_sessions)
-                self.mount(card)
-                self.cards.append(card)
+                um_card = UnmanagedCard(branch, branch_sessions)
+                self.mount(um_card)
+                self.cards.append(um_card)
 
     def get_focusable_cards(self) -> list[WorkItemCard | UnmanagedCard]:
         """Return all focusable card widgets in this column."""

@@ -53,5 +53,5 @@ class HelpDialog(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss()
 
-    def action_dismiss(self) -> None:
+    def action_dismiss(self, result: object = None) -> None:  # type: ignore[override]
         self.app.pop_screen()
