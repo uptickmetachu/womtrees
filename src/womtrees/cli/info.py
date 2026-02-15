@@ -303,6 +303,10 @@ def attach(item_id: int, session_id: int | None) -> None:
 
         if item is None:
             raise click.ClickException(f"WorkItem #{item_id} not found.")
+        if item.status == "todo":
+            raise click.ClickException(
+                f"WorkItem #{item_id} is still in TODO. Start it first with: wt start {item_id}"
+            )
         if not item.tmux_session or not tmux.session_exists(item.tmux_session):
             if not item.worktree_path and not item.repo_path:
                 raise click.ClickException(

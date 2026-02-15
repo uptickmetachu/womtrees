@@ -387,6 +387,25 @@ def test_attach_command(runner, db_conn, tmp_path):
         mock_attach.assert_called_once_with("myrepo/feat-x")
 
 
+def test_attach_rejects_todo_item(runner, db_conn):
+    """Test that wt attach refuses to jump into a TODO work item."""
+    get_conn_fn, db_path = db_conn
+
+    with (
+        patch("womtrees.db.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+
+        result = runner.invoke(cli, ["attach", "1"])
+        assert result.exit_code == 1
+        assert "TODO" in result.output
+        assert "Start it first" in result.output
+
+
 def test_attach_restores_missing_session(runner, db_conn):
     """Test wt attach recreates tmux session when it no longer exists."""
     get_conn_fn, db_path = db_conn
@@ -405,6 +424,13 @@ def test_attach_restores_missing_session(runner, db_conn):
         patch("womtrees.tmux.attach") as mock_attach,
     ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
+
+        # Move item out of todo so attach is allowed
+        from womtrees.db import update_work_item
+
+        conn = get_conn_fn()
+        update_work_item(conn, 1, status="working")
+        conn.close()
 
         # Session doesn't exist initially, then exists after restore
         mock_exists.side_effect = [False, True]
