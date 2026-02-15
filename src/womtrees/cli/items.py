@@ -198,19 +198,28 @@ def delete(item_id: int, force: bool) -> None:
 @click.argument("item_id", type=int)
 @click.option("-n", "--name", default=None, help="New name for the work item.")
 @click.option("-b", "--branch", default=None, help="New branch name.")
-def edit(item_id: int, name: str | None, branch: str | None) -> None:
-    """Edit a work item's name or branch."""
-    if name is None and branch is None:
-        raise click.ClickException("Provide --name and/or --branch.")
+@click.option("-p", "--prompt", default=None, help="New prompt (todo items only).")
+def edit(item_id: int, name: str | None, branch: str | None, prompt: str | None) -> None:
+    """Edit a work item's name, branch, or prompt."""
+    if name is None and branch is None and prompt is None:
+        raise click.ClickException("Provide --name, --branch, and/or --prompt.")
 
     with connection() as conn:
         item = get_work_item(conn, item_id)
         if item is None:
             raise click.ClickException(f"WorkItem #{item_id} not found.")
 
+        kwargs: dict[str, str | None] = {}
+        if name is not None:
+            kwargs["name"] = name
+        if branch is not None:
+            kwargs["branch"] = branch
+        if prompt is not None:
+            kwargs["prompt"] = prompt
+
         try:
-            changed = edit_work_item(conn, item, name=name, branch=branch)
-        except (DuplicateBranchError, OpenPullRequestError) as e:
+            changed = edit_work_item(conn, item, **kwargs)
+        except (DuplicateBranchError, InvalidStateError, OpenPullRequestError) as e:
             raise click.ClickException(str(e))
 
     if changed:

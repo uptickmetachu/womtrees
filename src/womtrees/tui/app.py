@@ -420,7 +420,12 @@ class WomtreesApp(App):
 
         item = card.work_item
         self.push_screen(
-            EditDialog(item_name=item.name, item_branch=item.branch),
+            EditDialog(
+                item_name=item.name,
+                item_branch=item.branch,
+                item_prompt=item.prompt,
+                show_prompt=item.status == "todo",
+            ),
             lambda result: self._on_edit_dialog(result, item.id),
         )
 
@@ -430,6 +435,7 @@ class WomtreesApp(App):
 
         from womtrees.services.workitem import (
             DuplicateBranchError,
+            InvalidStateError,
             OpenPullRequestError,
             edit_work_item,
         )
@@ -440,11 +446,16 @@ class WomtreesApp(App):
             conn.close()
             return
 
+        prompt_kwargs = {}
+        if "prompt" in result:
+            prompt_kwargs["prompt"] = result["prompt"]
+
         try:
             changed = edit_work_item(
-                conn, item, name=result["name"], branch=result["branch"]
+                conn, item, name=result["name"], branch=result["branch"],
+                **prompt_kwargs,
             )
-        except (DuplicateBranchError, OpenPullRequestError) as e:
+        except (DuplicateBranchError, InvalidStateError, OpenPullRequestError) as e:
             conn.close()
             self.notify(str(e), severity="error")
             return
