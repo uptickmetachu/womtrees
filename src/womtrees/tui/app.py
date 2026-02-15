@@ -463,7 +463,11 @@ class WomtreesApp(App):
         if result is None:
             return
 
-        from womtrees.worktree import rename_branch, sanitize_branch_name
+        from womtrees.services.workitem import (
+            DuplicateBranchError,
+            OpenPullRequestError,
+            edit_work_item,
+        )
 
         conn = get_connection()
         item = get_work_item(conn, item_id)
@@ -471,69 +475,23 @@ class WomtreesApp(App):
             conn.close()
             return
 
-        updates: dict[str, str] = {}
-        new_branch = result["branch"]
-        new_name = result["name"]
-
-        if new_branch and new_branch != item.branch:
-            # Check for duplicate active branches
-            row = conn.execute(
-                "SELECT id FROM work_items WHERE repo_name = ? AND branch = ? AND status != 'done' AND id != ?",
-                (item.repo_name, new_branch, item_id),
-            ).fetchone()
-            if row:
-                conn.close()
-                self.notify(
-                    f"Branch '{new_branch}' already used by #{row['id']}",
-                    severity="error",
-                )
-                return
-
-            if item.worktree_path:
-                try:
-                    rename_branch(item.worktree_path, item.branch, new_branch)
-                except Exception as e:
-                    conn.close()
-                    self.notify(f"Failed to rename branch: {e}", severity="error")
-                    return
-
-            if item.tmux_session:
-                from womtrees import tmux
-
-                raw_name = f"{item.repo_name}/{sanitize_branch_name(new_branch)}"
-                new_session = tmux.sanitize_session_name(raw_name)
-                if tmux.session_exists(item.tmux_session):
-                    try:
-                        new_session = tmux.rename_session(
-                            item.tmux_session, new_session
-                        )
-                    except Exception as e:
-                        conn.close()
-                        self.notify(
-                            f"Failed to rename tmux session: {e}", severity="error"
-                        )
-                        return
-                updates["tmux_session"] = new_session
-
-                # Update claude_sessions so hook lookups still work
-                from womtrees.db import list_claude_sessions, update_claude_session
-
-                for cs in list_claude_sessions(conn, work_item_id=item_id):
-                    update_claude_session(
-                        conn, cs.id, tmux_session=new_session, branch=new_branch
-                    )
-
-            updates["branch"] = new_branch
-
-        if new_name != item.name:
-            updates["name"] = new_name
-
-        if updates:
-            update_work_item(conn, item_id, **updates)
+        try:
+            changed = edit_work_item(
+                conn, item, name=result["name"], branch=result["branch"]
+            )
+        except (DuplicateBranchError, OpenPullRequestError) as e:
+            conn.close()
+            self.notify(str(e), severity="error")
+            return
+        except Exception as e:
+            conn.close()
+            self.notify(f"Edit failed: {e}", severity="error")
+            return
 
         conn.close()
-        self.notify(f"Updated #{item_id}")
-        self._refresh_board()
+        if changed:
+            self.notify(f"Updated #{item_id}")
+            self._refresh_board()
 
     def action_review_item(self) -> None:
         card = self._get_focused_card()

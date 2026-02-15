@@ -763,7 +763,7 @@ def test_edit_branch_active_item(runner, db_conn, tmp_path):
         patch("womtrees.tmux.split_pane", return_value="%1"),
         patch("womtrees.tmux.send_keys"),
         patch("womtrees.tmux.session_exists", return_value=True),
-        patch("womtrees.cli.items.rename_branch") as mock_rename,
+        patch("womtrees.services.workitem.rename_branch") as mock_rename,
         patch(
             "womtrees.tmux.rename_session", return_value="myrepo-feat-new"
         ) as mock_rename_session,
@@ -790,6 +790,28 @@ def test_edit_branch_active_item(runner, db_conn, tmp_path):
         # tmux_session must be sanitized (no slashes) to match actual tmux name
         assert "/" not in item.tmux_session
         assert item.tmux_session == "myrepo-feat-new"
+
+
+def test_edit_branch_blocked_by_open_pr(runner, db_conn):
+    """Test that editing branch is rejected when an open PR exists."""
+    get_conn_fn, db_path = db_conn
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+
+        from womtrees.db import create_pull_request
+
+        conn = get_conn_fn()
+        create_pull_request(conn, 1, number=42, owner="user", repo="myrepo")
+
+        result = runner.invoke(cli, ["edit", "1", "--branch", "feat/y"])
+        assert result.exit_code != 0
+        assert "open PR" in result.output
 
 
 def test_edit_duplicate_branch(runner, db_conn):
