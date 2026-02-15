@@ -3,6 +3,7 @@ name = "womtrees"
 version = "0.1.0"
 description = "Git worktree manager with tmux and Claude Code integration"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "click",
