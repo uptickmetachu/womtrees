@@ -172,16 +172,18 @@ def needs_rebase(repo_path: str, branch: str) -> bool:
     return result.returncode != 0
 
 
-def rebase_branch(repo_path: str, branch: str) -> str:
-    """Rebase a branch onto the default branch.
+def rebase_branch(worktree_path: str, repo_path: str) -> str:
+    """Rebase the current branch in a worktree onto the default branch.
 
+    Runs from the worktree directory where the branch is already checked out.
     Returns the rebase output message.
     Raises subprocess.CalledProcessError on conflict or failure.
     """
     default_branch = get_default_branch(repo_path)
 
     result = subprocess.run(
-        ["git", "-C", repo_path, "rebase", default_branch, branch],
+        ["git", "rebase", default_branch],
+        cwd=worktree_path,
         check=True,
         capture_output=True,
         text=True,
@@ -190,10 +192,11 @@ def rebase_branch(repo_path: str, branch: str) -> str:
     return result.stdout.strip()
 
 
-def abort_rebase(repo_path: str) -> None:
-    """Abort an in-progress rebase."""
+def abort_rebase(worktree_path: str) -> None:
+    """Abort an in-progress rebase in a worktree."""
     subprocess.run(
-        ["git", "-C", repo_path, "rebase", "--abort"],
+        ["git", "rebase", "--abort"],
+        cwd=worktree_path,
         capture_output=True,
         text=True,
     )
