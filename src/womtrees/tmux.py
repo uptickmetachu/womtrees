@@ -29,10 +29,20 @@ def create_session(name: str, working_dir: str) -> tuple[str, str]:
             i += 1
         name = f"{name}-{i}"
 
-    result = _run([
-        "tmux", "new-session", "-d", "-s", name, "-c", working_dir,
-        "-P", "-F", "#{pane_id}",
-    ])
+    result = _run(
+        [
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            name,
+            "-c",
+            working_dir,
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ]
+    )
     pane_id = result.stdout.strip()
     return name, pane_id
 
@@ -43,12 +53,20 @@ def split_pane(session: str, direction: str, working_dir: str) -> str:
     direction: 'vertical' (-h, side by side) or 'horizontal' (-v, top/bottom)
     """
     flag = "-h" if direction == "vertical" else "-v"
-    result = _run([
-        "tmux", "split-window", flag,
-        "-t", session,
-        "-c", working_dir,
-        "-P", "-F", "#{pane_id}",
-    ])
+    result = _run(
+        [
+            "tmux",
+            "split-window",
+            flag,
+            "-t",
+            session,
+            "-c",
+            working_dir,
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ]
+    )
     return result.stdout.strip()
 
 
@@ -76,6 +94,22 @@ def session_exists(name: str) -> bool:
     """Check if a tmux session exists."""
     result = _run(["tmux", "has-session", "-t", name], check=False)
     return result.returncode == 0
+
+
+def rename_session(old_name: str, new_name: str) -> str:
+    """Rename a tmux session. Returns the actual new name (may have suffix if taken)."""
+    new_name = sanitize_session_name(new_name)
+
+    # Handle name collision (same logic as create_session)
+    candidate = new_name
+    if session_exists(candidate) and candidate != old_name:
+        i = 2
+        while session_exists(f"{new_name}-{i}") and f"{new_name}-{i}" != old_name:
+            i += 1
+        candidate = f"{new_name}-{i}"
+
+    _run(["tmux", "rename-session", "-t", old_name, candidate])
+    return candidate
 
 
 def set_environment(session: str, key: str, value: str) -> None:

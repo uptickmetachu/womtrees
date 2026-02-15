@@ -25,7 +25,9 @@ def _in_memory_conn() -> sqlite3.Connection:
 
 def test_create_and_get():
     conn = _in_memory_conn()
-    item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth", prompt="Add login")
+    item = create_work_item(
+        conn, "myrepo", "/tmp/myrepo", "feat/auth", prompt="Add login"
+    )
     assert item.id == 1
     assert item.repo_name == "myrepo"
     assert item.branch == "feat/auth"
@@ -81,7 +83,13 @@ def test_update():
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
 
-    updated = update_work_item(conn, item.id, status="working", worktree_path="/tmp/wt", tmux_session="repo/branch")
+    updated = update_work_item(
+        conn,
+        item.id,
+        status="working",
+        worktree_path="/tmp/wt",
+        tmux_session="repo/branch",
+    )
     assert updated is not None
     assert updated.status == "working"
     assert updated.worktree_path == "/tmp/wt"

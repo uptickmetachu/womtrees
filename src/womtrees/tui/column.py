@@ -89,7 +89,9 @@ class KanbanColumn(VerticalScroll):
                 items, sessions_by_item, unmanaged_sessions, prs_by_item, git_stats
             )
         else:
-            self._mount_flat(items, sessions_by_item, unmanaged_sessions, prs_by_item, git_stats)
+            self._mount_flat(
+                items, sessions_by_item, unmanaged_sessions, prs_by_item, git_stats
+            )
 
     def _mount_grouped(
         self,

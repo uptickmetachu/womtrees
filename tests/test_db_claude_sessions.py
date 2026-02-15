@@ -24,9 +24,14 @@ def _in_memory_conn() -> sqlite3.Connection:
 def test_create_and_get_session():
     conn = _in_memory_conn()
     session = create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="myrepo/feat-auth", tmux_pane="%1",
-        pid=1234, state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="myrepo/feat-auth",
+        tmux_pane="%1",
+        pid=1234,
+        state="working",
     )
     assert session.id == 1
     assert session.repo_name == "myrepo"
@@ -43,8 +48,12 @@ def test_create_session_with_work_item():
     conn = _in_memory_conn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     session = create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="myrepo/feat-auth", tmux_pane="%1",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="myrepo/feat-auth",
+        tmux_pane="%1",
         work_item_id=item.id,
     )
     assert session.work_item_id == item.id
@@ -54,16 +63,30 @@ def test_list_sessions_by_work_item():
     conn = _in_memory_conn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", work_item_id=item.id,
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        work_item_id=item.id,
     )
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%2", work_item_id=item.id,
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%2",
+        work_item_id=item.id,
     )
     create_claude_session(
-        conn, "other", "/tmp/other", "main",
-        tmux_session="s2", tmux_pane="%1",
+        conn,
+        "other",
+        "/tmp/other",
+        "main",
+        tmux_session="s2",
+        tmux_pane="%1",
     )
 
     sessions = list_claude_sessions(conn, work_item_id=item.id)
@@ -73,12 +96,20 @@ def test_list_sessions_by_work_item():
 def test_list_sessions_by_repo():
     conn = _in_memory_conn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
     )
     create_claude_session(
-        conn, "other", "/tmp/other", "main",
-        tmux_session="s2", tmux_pane="%1",
+        conn,
+        "other",
+        "/tmp/other",
+        "main",
+        tmux_session="s2",
+        tmux_pane="%1",
     )
 
     sessions = list_claude_sessions(conn, repo_name="myrepo")
@@ -89,12 +120,22 @@ def test_list_sessions_by_repo():
 def test_list_sessions_by_state():
     conn = _in_memory_conn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
     )
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%2", state="waiting",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%2",
+        state="waiting",
     )
 
     sessions = list_claude_sessions(conn, state="waiting")
@@ -105,8 +146,13 @@ def test_list_sessions_by_state():
 def test_update_session():
     conn = _in_memory_conn()
     session = create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="working",
     )
 
     updated = update_claude_session(conn, session.id, state="waiting")
@@ -118,8 +164,12 @@ def test_update_session():
 def test_delete_session():
     conn = _in_memory_conn()
     session = create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
     )
     assert delete_claude_session(conn, session.id) is True
     assert get_claude_session(conn, session.id) is None
@@ -128,12 +178,22 @@ def test_delete_session():
 def test_find_session():
     conn = _in_memory_conn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="myrepo/feat-auth", tmux_pane="%1", state="working",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="myrepo/feat-auth",
+        tmux_pane="%1",
+        state="working",
     )
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="myrepo/feat-auth", tmux_pane="%2", state="waiting",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="myrepo/feat-auth",
+        tmux_pane="%2",
+        state="waiting",
     )
 
     found = find_claude_session(conn, "myrepo/feat-auth", "%1")
@@ -147,8 +207,13 @@ def test_find_session():
 def test_find_session_includes_done():
     conn = _in_memory_conn()
     create_claude_session(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth",
-        tmux_session="s1", tmux_pane="%1", state="done",
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        tmux_session="s1",
+        tmux_pane="%1",
+        state="done",
     )
 
     found = find_claude_session(conn, "s1", "%1")
