@@ -11,7 +11,7 @@ class AutoRebaseDialog(ModalScreen[bool]):
     """Prompt dialog offering to use Claude to auto-rebase a branch."""
 
     BINDINGS = [
-        Binding("ctrl+enter", "confirm", "Confirm", show=False),
+        Binding("ctrl+s,ctrl+enter", "confirm", "Confirm", show=True, priority=True),
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
@@ -47,7 +47,7 @@ class AutoRebaseDialog(ModalScreen[bool]):
         with Vertical(id="dialog"):
             yield Label(self.message)
             with Grid(classes="buttons"):
-                yield Button("Auto-rebase", variant="error", id="confirm")
+                yield Button("Auto-rebase (ctrl+s)", variant="error", id="confirm")
                 yield Button("Cancel", variant="primary", id="cancel")
 
     def action_confirm(self) -> None:

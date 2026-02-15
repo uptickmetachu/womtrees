@@ -11,7 +11,7 @@ class CreateDialog(ModalScreen[dict | None]):
     """Modal dialog for creating a new WorkItem."""
 
     BINDINGS = [
-        Binding("ctrl+enter", "submit", "Submit", show=False),
+        Binding("ctrl+s,ctrl+enter", "submit", "Submit", show=True, priority=True),
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
@@ -108,7 +108,7 @@ class CreateDialog(ModalScreen[dict | None]):
             yield Label("Prompt:")
             yield TextArea(id="prompt-input")
             with Grid(classes="buttons"):
-                yield Button("Submit", variant="primary", id="submit")
+                yield Button("Submit (ctrl+s)", variant="primary", id="submit")
                 yield Button("Cancel", id="cancel")
 
     def on_select_changed(self, event: Select.Changed) -> None:
