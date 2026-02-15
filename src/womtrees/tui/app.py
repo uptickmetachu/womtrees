@@ -48,13 +48,9 @@ class WomtreesApp(App):
 
     #status-bar {
         dock: bottom;
-        height: 3;
+        height: 2;
         padding: 0 1;
         background: $boost;
-    }
-
-    #status-keys {
-        width: 100%;
     }
 
     #status-counts {
@@ -74,7 +70,6 @@ class WomtreesApp(App):
         Binding("s", "start_item", "Start", show=True),
         Binding("c", "create_item", "Create", show=True),
         Binding("t", "todo_item", "Todo", show=True),
-        Binding("r", "review_item", "Review", show=True),
         Binding("m", "merge_item", "Merge", show=True),
         Binding("e", "edit_item", "Edit", show=True),
         Binding("d", "delete_item", "Delete", show=True),
@@ -98,10 +93,6 @@ class WomtreesApp(App):
         yield Header()
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
-            yield Static(
-                "[s]tart [e]dit [r]eview [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
-                id="status-keys",
-            )
             yield Static("", id="status-counts")
         yield Footer()
 
@@ -485,30 +476,6 @@ class WomtreesApp(App):
         if changed:
             self.notify(f"Updated #{item_id}")
             self._refresh_board()
-
-    def action_review_item(self) -> None:
-        from womtrees.services.workitem import (
-            InvalidStateError,
-            WorkItemNotFoundError,
-            review_work_item,
-        )
-
-        card = self._get_focused_card()
-        if not isinstance(card, WorkItemCard):
-            return
-        if card.work_item.status not in ("working", "input"):
-            self.notify("Can only review WORKING or INPUT items", severity="warning")
-            return
-
-        conn = get_connection()
-        try:
-            review_work_item(conn, card.work_item.id)
-            self.notify(f"#{card.work_item.id} moved to review")
-        except (WorkItemNotFoundError, InvalidStateError) as e:
-            self.notify(str(e), severity="error")
-        finally:
-            conn.close()
-        self._refresh_board()
 
     def action_merge_item(self) -> None:
         """Merge a review item's branch into the default branch."""
