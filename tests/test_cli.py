@@ -827,7 +827,7 @@ def test_edit_no_options(runner, db_conn):
     with patch("womtrees.db.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["edit", "1"])
         assert result.exit_code != 0
-        assert "Provide --name and/or --branch" in result.output
+        assert "Provide --name, --branch, and/or --prompt" in result.output
 
 
 def test_edit_nonexistent(runner, db_conn):

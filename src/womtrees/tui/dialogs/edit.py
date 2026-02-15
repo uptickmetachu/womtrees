@@ -4,11 +4,11 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label
+from textual.widgets import Button, Input, Label, TextArea
 
 
 class EditDialog(ModalScreen[dict | None]):
-    """Modal dialog for editing a WorkItem's name and branch."""
+    """Modal dialog for editing a WorkItem's name, branch, and prompt."""
 
     BINDINGS = [
         Binding("ctrl+enter", "submit", "Submit", show=False),
@@ -21,7 +21,7 @@ class EditDialog(ModalScreen[dict | None]):
     }
 
     EditDialog #dialog {
-        width: 55;
+        width: 75;
         height: auto;
         padding: 1 2;
         border: thick $accent;
@@ -33,6 +33,10 @@ class EditDialog(ModalScreen[dict | None]):
     }
 
     EditDialog #dialog Input {
+        margin: 0 0 1 0;
+    }
+
+    EditDialog #dialog TextArea {
         margin: 0 0 1 0;
     }
 
@@ -51,11 +55,15 @@ class EditDialog(ModalScreen[dict | None]):
         self,
         item_name: str | None,
         item_branch: str,
+        item_prompt: str | None = None,
+        show_prompt: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.item_name = item_name or ""
         self.item_branch = item_branch
+        self.item_prompt = item_prompt or ""
+        self.show_prompt = show_prompt
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -64,6 +72,9 @@ class EditDialog(ModalScreen[dict | None]):
             yield Input(value=self.item_name, id="name-input")
             yield Label("Branch:")
             yield Input(value=self.item_branch, id="branch-input")
+            if self.show_prompt:
+                yield Label("Prompt:")
+                yield TextArea(self.item_prompt, id="prompt-input")
             with Grid(classes="buttons"):
                 yield Button("Save", variant="primary", id="submit")
                 yield Button("Cancel", id="cancel")
@@ -74,7 +85,11 @@ class EditDialog(ModalScreen[dict | None]):
         if not branch:
             self.query_one("#branch-input", Input).focus()
             return
-        self.dismiss({"name": name, "branch": branch})
+        result: dict[str, str | None] = {"name": name, "branch": branch}
+        if self.show_prompt:
+            prompt_text = self.query_one("#prompt-input", TextArea).text.strip()
+            result["prompt"] = prompt_text or None
+        self.dismiss(result)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

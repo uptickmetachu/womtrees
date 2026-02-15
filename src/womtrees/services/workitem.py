@@ -25,6 +25,9 @@ from womtrees.worktree import (
 )
 
 
+_SENTINEL = object()  # distinguishes "not provided" from None for prompt editing
+
+
 # -- Exceptions --
 
 
@@ -288,17 +291,20 @@ def edit_work_item(
     *,
     name: str | None = None,
     branch: str | None = None,
+    prompt: str | None | object = _SENTINEL,
 ) -> bool:
-    """Edit a work item's name and/or branch.
+    """Edit a work item's name, branch, and/or prompt.
 
     Handles git branch rename, tmux session rename, and claude session updates.
+    Prompt editing is only allowed for items in 'todo' status.
 
     Returns True if any updates were applied, False otherwise.
     Raises DuplicateBranchError if the branch is already in use.
     Raises OpenPullRequestError if the item has an open PR.
+    Raises InvalidStateError if prompt edit is attempted on a non-todo item.
     Raises subprocess.CalledProcessError if git or tmux operations fail.
     """
-    updates: dict[str, str] = {}
+    updates: dict[str, str | None] = {}
 
     if branch is not None and branch != item.branch:
         # Block branch rename when an open PR exists
@@ -344,6 +350,11 @@ def edit_work_item(
 
     if name is not None and name != item.name:
         updates["name"] = name
+
+    if prompt is not _SENTINEL and prompt != item.prompt:
+        if item.status != "todo":
+            raise InvalidStateError(item.id, item.status, "edit prompt")
+        updates["prompt"] = prompt  # type: ignore[assignment]  # guarded by sentinel check
 
     if updates:
         update_work_item(conn, item.id, **updates)
