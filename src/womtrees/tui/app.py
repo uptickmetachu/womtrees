@@ -27,6 +27,7 @@ from womtrees.tui.dialogs import (
     ClaudeStreamDialog,
     CreateDialog,
     DeleteDialog,
+    EditDialog,
     HelpDialog,
     MergeDialog,
     RebaseDialog,
@@ -75,6 +76,7 @@ class WomtreesApp(App):
         Binding("t", "todo_item", "Todo", show=True),
         Binding("r", "review_item", "Review", show=True),
         Binding("m", "merge_item", "Merge", show=True),
+        Binding("e", "edit_item", "Edit", show=True),
         Binding("d", "delete_item", "Delete", show=True),
         Binding("p", "create_pr", "PR", show=True),
         Binding("g", "toggle_grouping", "Group", show=True),
@@ -91,7 +93,7 @@ class WomtreesApp(App):
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
             yield Static(
-                "[s]tart [r]eview [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
+                "[s]tart [e]dit [r]eview [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
                 id="status-keys",
             )
             yield Static("", id="status-counts")
@@ -443,6 +445,94 @@ class WomtreesApp(App):
             self.notify(f"Created TODO #{item.id}")
 
         conn.close()
+        self._refresh_board()
+
+    def action_edit_item(self) -> None:
+        """Edit a work item's name and branch."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+
+        item = card.work_item
+        self.push_screen(
+            EditDialog(item_name=item.name, item_branch=item.branch),
+            lambda result: self._on_edit_dialog(result, item.id),
+        )
+
+    def _on_edit_dialog(self, result: dict | None, item_id: int) -> None:
+        if result is None:
+            return
+
+        from womtrees.worktree import rename_branch, sanitize_branch_name
+
+        conn = get_connection()
+        item = get_work_item(conn, item_id)
+        if item is None:
+            conn.close()
+            return
+
+        updates: dict[str, str] = {}
+        new_branch = result["branch"]
+        new_name = result["name"]
+
+        if new_branch and new_branch != item.branch:
+            # Check for duplicate active branches
+            row = conn.execute(
+                "SELECT id FROM work_items WHERE repo_name = ? AND branch = ? AND status != 'done' AND id != ?",
+                (item.repo_name, new_branch, item_id),
+            ).fetchone()
+            if row:
+                conn.close()
+                self.notify(
+                    f"Branch '{new_branch}' already used by #{row['id']}",
+                    severity="error",
+                )
+                return
+
+            if item.worktree_path:
+                try:
+                    rename_branch(item.worktree_path, item.branch, new_branch)
+                except Exception as e:
+                    conn.close()
+                    self.notify(f"Failed to rename branch: {e}", severity="error")
+                    return
+
+            if item.tmux_session:
+                from womtrees import tmux
+
+                raw_name = f"{item.repo_name}/{sanitize_branch_name(new_branch)}"
+                new_session = tmux.sanitize_session_name(raw_name)
+                if tmux.session_exists(item.tmux_session):
+                    try:
+                        new_session = tmux.rename_session(
+                            item.tmux_session, new_session
+                        )
+                    except Exception as e:
+                        conn.close()
+                        self.notify(
+                            f"Failed to rename tmux session: {e}", severity="error"
+                        )
+                        return
+                updates["tmux_session"] = new_session
+
+                # Update claude_sessions so hook lookups still work
+                from womtrees.db import list_claude_sessions, update_claude_session
+
+                for cs in list_claude_sessions(conn, work_item_id=item_id):
+                    update_claude_session(
+                        conn, cs.id, tmux_session=new_session, branch=new_branch
+                    )
+
+            updates["branch"] = new_branch
+
+        if new_name != item.name:
+            updates["name"] = new_name
+
+        if updates:
+            update_work_item(conn, item_id, **updates)
+
+        conn.close()
+        self.notify(f"Updated #{item_id}")
         self._refresh_board()
 
     def action_review_item(self) -> None:

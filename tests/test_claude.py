@@ -16,8 +16,10 @@ def test_install_global_hooks_fresh(mock_file, mock_dir, tmp_path):
     mock_file.exists.return_value = False
 
     # Patch the actual file operations
-    with patch("womtrees.claude.CLAUDE_SETTINGS_DIR", tmp_path), \
-         patch("womtrees.claude.CLAUDE_SETTINGS_FILE", settings_file):
+    with (
+        patch("womtrees.claude.CLAUDE_SETTINGS_DIR", tmp_path),
+        patch("womtrees.claude.CLAUDE_SETTINGS_FILE", settings_file),
+    ):
         install_global_hooks()
 
     data = json.loads(settings_file.read_text())
@@ -26,11 +28,17 @@ def test_install_global_hooks_fresh(mock_file, mock_dir, tmp_path):
     assert "Stop" in data["hooks"]
     # New format: each entry has a "hooks" array with handler objects
     assert any(
-        any("wt hook heartbeat" in handler.get("command", "") for handler in entry.get("hooks", []))
+        any(
+            "wt hook heartbeat" in handler.get("command", "")
+            for handler in entry.get("hooks", [])
+        )
         for entry in data["hooks"]["PostToolUse"]
     )
     assert any(
-        any("wt hook stop" in handler.get("command", "") for handler in entry.get("hooks", []))
+        any(
+            "wt hook stop" in handler.get("command", "")
+            for handler in entry.get("hooks", [])
+        )
         for entry in data["hooks"]["Stop"]
     )
 
@@ -42,8 +50,10 @@ def test_install_global_hooks_existing(mock_file, mock_dir, tmp_path):
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(json.dumps({"existing_key": "value", "hooks": {}}))
 
-    with patch("womtrees.claude.CLAUDE_SETTINGS_DIR", tmp_path), \
-         patch("womtrees.claude.CLAUDE_SETTINGS_FILE", settings_file):
+    with (
+        patch("womtrees.claude.CLAUDE_SETTINGS_DIR", tmp_path),
+        patch("womtrees.claude.CLAUDE_SETTINGS_FILE", settings_file),
+    ):
         install_global_hooks()
 
     data = json.loads(settings_file.read_text())
@@ -57,16 +67,22 @@ def test_install_global_hooks_no_duplicate(mock_file, mock_dir, tmp_path):
     """Test that installing hooks twice doesn't duplicate."""
     settings_file = tmp_path / "settings.json"
 
-    with patch("womtrees.claude.CLAUDE_SETTINGS_DIR", tmp_path), \
-         patch("womtrees.claude.CLAUDE_SETTINGS_FILE", settings_file):
+    with (
+        patch("womtrees.claude.CLAUDE_SETTINGS_DIR", tmp_path),
+        patch("womtrees.claude.CLAUDE_SETTINGS_FILE", settings_file),
+    ):
         install_global_hooks()
         install_global_hooks()
 
     data = json.loads(settings_file.read_text())
     # Should only have one heartbeat hook entry
     heartbeat_entries = [
-        entry for entry in data["hooks"]["PostToolUse"]
-        if any("wt hook" in handler.get("command", "") for handler in entry.get("hooks", []))
+        entry
+        for entry in data["hooks"]["PostToolUse"]
+        if any(
+            "wt hook" in handler.get("command", "")
+            for handler in entry.get("hooks", [])
+        )
     ]
     assert len(heartbeat_entries) == 1
 
@@ -74,6 +90,7 @@ def test_install_global_hooks_no_duplicate(mock_file, mock_dir, tmp_path):
 @patch("subprocess.run")
 def test_detect_context(mock_run):
     """Test context detection with mocked environment."""
+
     def side_effect(args, **kwargs):
         result = MagicMock()
         if args[:2] == ["tmux", "display-message"]:
@@ -123,6 +140,7 @@ def test_detect_context_no_tmux(mock_run):
 def test_is_pid_alive_current_process():
     """Test that our own PID is alive."""
     import os
+
     assert is_pid_alive(os.getpid()) is True
 
 

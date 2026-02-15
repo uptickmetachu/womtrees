@@ -11,10 +11,13 @@ from womtrees.db import (
     delete_work_item,
     get_connection,
     get_work_item,
+    list_claude_sessions,
+    update_claude_session,
     update_work_item,
 )
 from womtrees.worktree import (
     create_worktree,
+    rename_branch,
     remove_worktree,
     sanitize_branch_name,
 )
@@ -295,3 +298,66 @@ def delete(item_id: int, force: bool) -> None:
     delete_work_item(conn, item_id)
     conn.close()
     click.echo(f"Deleted #{item_id}")
+
+
+@click.command()
+@click.argument("item_id", type=int)
+@click.option("-n", "--name", default=None, help="New name for the work item.")
+@click.option("-b", "--branch", default=None, help="New branch name.")
+def edit(item_id: int, name: str | None, branch: str | None) -> None:
+    """Edit a work item's name or branch."""
+    if name is None and branch is None:
+        raise click.ClickException("Provide --name and/or --branch.")
+
+    conn = get_connection()
+    item = get_work_item(conn, item_id)
+    if item is None:
+        conn.close()
+        raise click.ClickException(f"WorkItem #{item_id} not found.")
+
+    updates: dict[str, str] = {}
+
+    if branch is not None and branch != item.branch:
+        # Check for duplicate active branches
+        row = conn.execute(
+            "SELECT id FROM work_items WHERE repo_name = ? AND branch = ? AND status != 'done' AND id != ?",
+            (item.repo_name, branch, item_id),
+        ).fetchone()
+        if row:
+            conn.close()
+            raise click.ClickException(
+                f"Branch '{branch}' is already used by active WorkItem #{row['id']}."
+            )
+
+        # Rename the git branch if worktree exists
+        if item.worktree_path:
+            rename_branch(item.worktree_path, item.branch, branch)
+
+        # Rename tmux session if it exists
+        if item.tmux_session:
+            from womtrees import tmux
+
+            raw_name = f"{item.repo_name}/{sanitize_branch_name(branch)}"
+            new_session_name = tmux.sanitize_session_name(raw_name)
+            if tmux.session_exists(item.tmux_session):
+                new_session_name = tmux.rename_session(
+                    item.tmux_session, new_session_name
+                )
+            updates["tmux_session"] = new_session_name
+
+            # Update claude_sessions so hook lookups still work
+            for cs in list_claude_sessions(conn, work_item_id=item_id):
+                update_claude_session(
+                    conn, cs.id, tmux_session=new_session_name, branch=branch
+                )
+
+        updates["branch"] = branch
+
+    if name is not None:
+        updates["name"] = name
+
+    if updates:
+        update_work_item(conn, item_id, **updates)
+
+    conn.close()
+    click.echo(f"Updated #{item_id}")
