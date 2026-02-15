@@ -48,13 +48,9 @@ class WomtreesApp(App):
 
     #status-bar {
         dock: bottom;
-        height: 3;
+        height: 2;
         padding: 0 1;
         background: $boost;
-    }
-
-    #status-keys {
-        width: 100%;
     }
 
     #status-counts {
@@ -97,10 +93,6 @@ class WomtreesApp(App):
         yield Header()
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
-            yield Static(
-                "[s]tart [e]dit [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
-                id="status-keys",
-            )
             yield Static("", id="status-counts")
         yield Footer()
 
