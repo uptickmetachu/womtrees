@@ -112,8 +112,7 @@ def test_status_tmux_ignores_working_sessions(tmp_path):
 def test_configure_tmux_fresh(tmp_path):
     conf = tmp_path / ".tmux.conf"
 
-    with patch("womtrees.claude.TMUX_CONF", conf), \
-         patch("subprocess.run"):
+    with patch("womtrees.claude.TMUX_CONF", conf), patch("subprocess.run"):
         result = configure_tmux_status_bar()
 
     assert result is True
@@ -126,8 +125,7 @@ def test_configure_tmux_idempotent(tmp_path):
     conf = tmp_path / ".tmux.conf"
     conf.write_text('set -g status-right "#(wt status --tmux) | %H:%M"\n')
 
-    with patch("womtrees.claude.TMUX_CONF", conf), \
-         patch("subprocess.run"):
+    with patch("womtrees.claude.TMUX_CONF", conf), patch("subprocess.run"):
         result = configure_tmux_status_bar()
 
     assert result is False
@@ -137,8 +135,7 @@ def test_configure_tmux_preserves_existing(tmp_path):
     conf = tmp_path / ".tmux.conf"
     conf.write_text("set -g mouse on\nbind r source-file ~/.tmux.conf\n")
 
-    with patch("womtrees.claude.TMUX_CONF", conf), \
-         patch("subprocess.run"):
+    with patch("womtrees.claude.TMUX_CONF", conf), patch("subprocess.run"):
         configure_tmux_status_bar()
 
     content = conf.read_text()
@@ -151,8 +148,7 @@ def test_configure_tmux_comments_out_existing_status_right(tmp_path):
     conf = tmp_path / ".tmux.conf"
     conf.write_text('set -g status-right "%H:%M"\nset -g status-interval 15\n')
 
-    with patch("womtrees.claude.TMUX_CONF", conf), \
-         patch("subprocess.run"):
+    with patch("womtrees.claude.TMUX_CONF", conf), patch("subprocess.run"):
         configure_tmux_status_bar()
 
     content = conf.read_text()

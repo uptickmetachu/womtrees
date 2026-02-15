@@ -692,6 +692,164 @@ def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
         assert "Created TODO #1" in result.output
 
 
+def test_edit_name_only(runner, db_conn):
+    """Test editing just the name of a todo item."""
+    get_conn_fn, db_path = db_conn
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/x", "-n", "old name"])
+        result = runner.invoke(cli, ["edit", "1", "--name", "new name"])
+        assert result.exit_code == 0
+        assert "Updated #1" in result.output
+
+        conn = get_conn_fn()
+        from womtrees.db import get_work_item
+
+        item = get_work_item(conn, 1)
+        assert item.name == "new name"
+        assert item.branch == "feat/x"
+
+
+def test_edit_branch_todo_item(runner, db_conn):
+    """Test editing the branch of a todo item (no worktree)."""
+    get_conn_fn, db_path = db_conn
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/old"])
+        result = runner.invoke(cli, ["edit", "1", "--branch", "feat/new"])
+        assert result.exit_code == 0
+        assert "Updated #1" in result.output
+
+        conn = get_conn_fn()
+        from womtrees.db import get_work_item
+
+        item = get_work_item(conn, 1)
+        assert item.branch == "feat/new"
+
+
+def test_edit_branch_active_item(runner, db_conn, tmp_path):
+    """Test editing branch on an active item renames the git branch."""
+    get_conn_fn, db_path = db_conn
+
+    mock_config = MagicMock()
+    mock_config.base_dir = tmp_path / "worktrees"
+    mock_config.tmux_split = "vertical"
+    mock_config.tmux_claude_pane = "right"
+
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+        patch("womtrees.cli.items.get_config", return_value=mock_config),
+        patch(
+            "womtrees.cli.items.create_worktree",
+            return_value=tmp_path / "worktrees" / "myrepo" / "feat-old",
+        ),
+        patch("womtrees.tmux.is_available", return_value=True),
+        patch("womtrees.tmux.create_session", return_value=("myrepo/feat-old", "%0")),
+        patch("womtrees.tmux.set_environment"),
+        patch("womtrees.tmux.split_pane", return_value="%1"),
+        patch("womtrees.tmux.send_keys"),
+        patch("womtrees.tmux.session_exists", return_value=True),
+        patch("womtrees.services.workitem.rename_branch") as mock_rename,
+        patch(
+            "womtrees.tmux.rename_session", return_value="myrepo-feat-new"
+        ) as mock_rename_session,
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/old"])
+        runner.invoke(cli, ["start", "1"])
+
+        result = runner.invoke(cli, ["edit", "1", "--branch", "feat/new"])
+        assert result.exit_code == 0
+        assert "Updated #1" in result.output
+
+        mock_rename.assert_called_once_with(
+            str(tmp_path / "worktrees" / "myrepo" / "feat-old"),
+            "feat/old",
+            "feat/new",
+        )
+        mock_rename_session.assert_called_once()
+
+        conn = get_conn_fn()
+        from womtrees.db import get_work_item
+
+        item = get_work_item(conn, 1)
+        assert item.branch == "feat/new"
+        # tmux_session must be sanitized (no slashes) to match actual tmux name
+        assert "/" not in item.tmux_session
+        assert item.tmux_session == "myrepo-feat-new"
+
+
+def test_edit_branch_blocked_by_open_pr(runner, db_conn):
+    """Test that editing branch is rejected when an open PR exists."""
+    get_conn_fn, db_path = db_conn
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/x"])
+
+        from womtrees.db import create_pull_request
+
+        conn = get_conn_fn()
+        create_pull_request(conn, 1, number=42, owner="user", repo="myrepo")
+
+        result = runner.invoke(cli, ["edit", "1", "--branch", "feat/y"])
+        assert result.exit_code != 0
+        assert "open PR" in result.output
+
+
+def test_edit_duplicate_branch(runner, db_conn):
+    """Test that editing to a duplicate active branch is rejected."""
+    get_conn_fn, db_path = db_conn
+    with (
+        patch("womtrees.cli.items.get_connection", get_conn_fn),
+        patch(
+            "womtrees.cli.utils.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
+        ),
+    ):
+        runner.invoke(cli, ["todo", "-b", "feat/a"])
+        runner.invoke(cli, ["todo", "-b", "feat/b"])
+
+        result = runner.invoke(cli, ["edit", "2", "--branch", "feat/a"])
+        assert result.exit_code != 0
+        assert "already used" in result.output
+
+
+def test_edit_no_options(runner, db_conn):
+    """Test that edit requires at least --name or --branch."""
+    get_conn_fn, db_path = db_conn
+    with patch("womtrees.cli.items.get_connection", get_conn_fn):
+        result = runner.invoke(cli, ["edit", "1"])
+        assert result.exit_code != 0
+        assert "Provide --name and/or --branch" in result.output
+
+
+def test_edit_nonexistent(runner, db_conn):
+    """Test editing a non-existent item."""
+    get_conn_fn, db_path = db_conn
+    with patch("womtrees.cli.items.get_connection", get_conn_fn):
+        result = runner.invoke(cli, ["edit", "999", "--name", "test"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+
 def test_create_with_repo_option(runner, db_conn, tmp_path):
     """Test that create command also accepts -r option."""
     get_conn_fn, db_path = db_conn

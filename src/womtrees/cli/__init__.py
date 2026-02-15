@@ -24,6 +24,7 @@ from womtrees.cli.items import (
     create,
     delete,
     done,
+    edit,
     review,
     start,
     todo,
@@ -42,6 +43,7 @@ cli.add_command(start)
 cli.add_command(review)
 cli.add_command(done)
 cli.add_command(delete)
+cli.add_command(edit)
 
 # Register info commands
 cli.add_command(list_cmd)

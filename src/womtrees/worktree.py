@@ -289,6 +289,16 @@ def merge_branch(repo_path: str, branch: str) -> str:
     return result.stdout.strip()
 
 
+def rename_branch(worktree_path: str, old_branch: str, new_branch: str) -> None:
+    """Rename a git branch inside a worktree directory."""
+    subprocess.run(
+        ["git", "-C", worktree_path, "branch", "-m", old_branch, new_branch],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 def remove_worktree(
     worktree_path: str | Path, repo_path: str | Path | None = None
 ) -> None:

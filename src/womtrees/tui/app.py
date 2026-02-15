@@ -27,6 +27,7 @@ from womtrees.tui.dialogs import (
     ClaudeStreamDialog,
     CreateDialog,
     DeleteDialog,
+    EditDialog,
     HelpDialog,
     MergeDialog,
     RebaseDialog,
@@ -75,6 +76,7 @@ class WomtreesApp(App):
         Binding("t", "todo_item", "Todo", show=True),
         Binding("r", "review_item", "Review", show=True),
         Binding("m", "merge_item", "Merge", show=True),
+        Binding("e", "edit_item", "Edit", show=True),
         Binding("d", "delete_item", "Delete", show=True),
         Binding("p", "create_pr", "PR", show=True),
         Binding("g", "toggle_grouping", "Group", show=True),
@@ -91,7 +93,7 @@ class WomtreesApp(App):
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
             yield Static(
-                "[s]tart [r]eview [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
+                "[s]tart [e]dit [r]eview [m]erge [p]r [d]elete [Enter]jump [g]roup [a]ll [?]help [q]uit",
                 id="status-keys",
             )
             yield Static("", id="status-counts")
@@ -444,6 +446,52 @@ class WomtreesApp(App):
 
         conn.close()
         self._refresh_board()
+
+    def action_edit_item(self) -> None:
+        """Edit a work item's name and branch."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+
+        item = card.work_item
+        self.push_screen(
+            EditDialog(item_name=item.name, item_branch=item.branch),
+            lambda result: self._on_edit_dialog(result, item.id),
+        )
+
+    def _on_edit_dialog(self, result: dict | None, item_id: int) -> None:
+        if result is None:
+            return
+
+        from womtrees.services.workitem import (
+            DuplicateBranchError,
+            OpenPullRequestError,
+            edit_work_item,
+        )
+
+        conn = get_connection()
+        item = get_work_item(conn, item_id)
+        if item is None:
+            conn.close()
+            return
+
+        try:
+            changed = edit_work_item(
+                conn, item, name=result["name"], branch=result["branch"]
+            )
+        except (DuplicateBranchError, OpenPullRequestError) as e:
+            conn.close()
+            self.notify(str(e), severity="error")
+            return
+        except Exception as e:
+            conn.close()
+            self.notify(f"Edit failed: {e}", severity="error")
+            return
+
+        conn.close()
+        if changed:
+            self.notify(f"Updated #{item_id}")
+            self._refresh_board()
 
     def action_review_item(self) -> None:
         card = self._get_focused_card()

@@ -7,6 +7,7 @@ from womtrees.tmux import (
     create_session,
     is_available,
     kill_session,
+    rename_session,
     sanitize_session_name,
     send_keys,
     session_exists,
@@ -30,10 +31,20 @@ def test_create_session(mock_exists, mock_run):
     name, pane_id = create_session("repo/branch", "/tmp/wt")
     assert name == "repo-branch"
     assert pane_id == "%0"
-    mock_run.assert_called_once_with([
-        "tmux", "new-session", "-d", "-s", "repo-branch", "-c", "/tmp/wt",
-        "-P", "-F", "#{pane_id}",
-    ])
+    mock_run.assert_called_once_with(
+        [
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            "repo-branch",
+            "-c",
+            "/tmp/wt",
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ]
+    )
 
 
 @patch("womtrees.tmux._run")
@@ -50,12 +61,20 @@ def test_split_pane_vertical(mock_run):
     mock_run.return_value = MagicMock(stdout="%1\n")
     pane_id = split_pane("mysession", "vertical", "/tmp/wt")
     assert pane_id == "%1"
-    mock_run.assert_called_once_with([
-        "tmux", "split-window", "-h",
-        "-t", "mysession",
-        "-c", "/tmp/wt",
-        "-P", "-F", "#{pane_id}",
-    ])
+    mock_run.assert_called_once_with(
+        [
+            "tmux",
+            "split-window",
+            "-h",
+            "-t",
+            "mysession",
+            "-c",
+            "/tmp/wt",
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ]
+    )
 
 
 @patch("womtrees.tmux._run")
@@ -63,12 +82,20 @@ def test_split_pane_horizontal(mock_run):
     mock_run.return_value = MagicMock(stdout="%2\n")
     pane_id = split_pane("mysession", "horizontal", "/tmp/wt")
     assert pane_id == "%2"
-    mock_run.assert_called_once_with([
-        "tmux", "split-window", "-v",
-        "-t", "mysession",
-        "-c", "/tmp/wt",
-        "-P", "-F", "#{pane_id}",
-    ])
+    mock_run.assert_called_once_with(
+        [
+            "tmux",
+            "split-window",
+            "-v",
+            "-t",
+            "mysession",
+            "-c",
+            "/tmp/wt",
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ]
+    )
 
 
 @patch("womtrees.tmux._run")
@@ -135,3 +162,24 @@ def test_is_available_true(mock_run):
 @patch("womtrees.tmux._run", side_effect=FileNotFoundError)
 def test_is_available_false(mock_run):
     assert is_available() is False
+
+
+@patch("womtrees.tmux._run")
+@patch("womtrees.tmux.session_exists", return_value=False)
+def test_rename_session(mock_exists, mock_run):
+    result = rename_session("old-session", "repo/new-branch")
+    assert result == "repo-new-branch"
+    mock_run.assert_called_once_with(
+        ["tmux", "rename-session", "-t", "old-session", "repo-new-branch"]
+    )
+
+
+@patch("womtrees.tmux._run")
+@patch("womtrees.tmux.session_exists", side_effect=[True, False])
+def test_rename_session_name_conflict(mock_exists, mock_run):
+    """Rename appends -2 when target name already exists."""
+    result = rename_session("old-session", "repo/branch")
+    assert result == "repo-branch-2"
+    mock_run.assert_called_once_with(
+        ["tmux", "rename-session", "-t", "old-session", "repo-branch-2"]
+    )

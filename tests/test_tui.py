@@ -15,6 +15,7 @@ from womtrees.tui.column import KanbanColumn
 
 # -- Fixtures --
 
+
 def _make_item(
     id: int = 1,
     repo_name: str = "myrepo",
@@ -75,6 +76,7 @@ def _make_session(
 
 # -- Unit tests for card helpers --
 
+
 class TestTimeAgo:
     def test_recent(self):
         now = datetime.now(timezone.utc).isoformat()
@@ -82,16 +84,19 @@ class TestTimeAgo:
 
     def test_minutes(self):
         from datetime import timedelta
+
         t = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
         assert _time_ago(t) == "30m"
 
     def test_hours(self):
         from datetime import timedelta
+
         t = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
         assert _time_ago(t) == "5h"
 
     def test_days(self):
         from datetime import timedelta
+
         t = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
         assert _time_ago(t) == "3d"
 
@@ -103,6 +108,7 @@ class TestTimeAgo:
 
 
 # -- Unit tests for board status mapping --
+
 
 class TestClaudeStateMapping:
     def test_working_maps_to_working(self):
@@ -117,6 +123,7 @@ class TestClaudeStateMapping:
 
 # -- Async TUI tests --
 
+
 class TestCheckRefresh:
     """Tests for the DB-mtime-based refresh trigger."""
 
@@ -125,17 +132,25 @@ class TestCheckRefresh:
         """_check_refresh does nothing when DB file doesn't exist."""
         from womtrees.tui.app import WomtreesApp
 
-        with patch("womtrees.tui.app.get_connection") as mock_conn, \
-             patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+        with (
+            patch("womtrees.tui.app.get_connection") as mock_conn,
+            patch(
+                "womtrees.tui.app.get_current_repo",
+                return_value=("myrepo", "/tmp/myrepo"),
+            ),
+        ):
             conn = MagicMock()
             mock_conn.return_value = conn
 
-            with patch("womtrees.tui.app.list_work_items", return_value=[]), \
-                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
+            with (
+                patch("womtrees.tui.app.list_work_items", return_value=[]),
+                patch("womtrees.tui.app.list_claude_sessions", return_value=[]),
+            ):
                 app = WomtreesApp()
                 async with app.run_test(size=(120, 40)) as pilot:
                     # Point at a nonexistent file
                     from pathlib import Path
+
                     app._db_path = Path("/tmp/nonexistent-womtrees-test.db")
                     call_count_before = mock_conn.call_count
                     app._check_refresh()
@@ -150,13 +165,20 @@ class TestCheckRefresh:
         db_file = tmp_path / "womtrees.db"
         db_file.write_text("fake")
 
-        with patch("womtrees.tui.app.get_connection") as mock_conn, \
-             patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+        with (
+            patch("womtrees.tui.app.get_connection") as mock_conn,
+            patch(
+                "womtrees.tui.app.get_current_repo",
+                return_value=("myrepo", "/tmp/myrepo"),
+            ),
+        ):
             conn = MagicMock()
             mock_conn.return_value = conn
 
-            with patch("womtrees.tui.app.list_work_items", return_value=[]), \
-                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
+            with (
+                patch("womtrees.tui.app.list_work_items", return_value=[]),
+                patch("womtrees.tui.app.list_claude_sessions", return_value=[]),
+            ):
                 app = WomtreesApp()
                 async with app.run_test(size=(120, 40)) as pilot:
                     app._db_path = db_file
@@ -175,13 +197,20 @@ class TestCheckRefresh:
         db_file = tmp_path / "womtrees.db"
         db_file.write_text("v1")
 
-        with patch("womtrees.tui.app.get_connection") as mock_conn, \
-             patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+        with (
+            patch("womtrees.tui.app.get_connection") as mock_conn,
+            patch(
+                "womtrees.tui.app.get_current_repo",
+                return_value=("myrepo", "/tmp/myrepo"),
+            ),
+        ):
             conn = MagicMock()
             mock_conn.return_value = conn
 
-            with patch("womtrees.tui.app.list_work_items", return_value=[]), \
-                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
+            with (
+                patch("womtrees.tui.app.list_work_items", return_value=[]),
+                patch("womtrees.tui.app.list_claude_sessions", return_value=[]),
+            ):
                 app = WomtreesApp()
                 async with app.run_test(size=(120, 40)) as pilot:
                     app._db_path = db_file
@@ -202,8 +231,12 @@ async def test_app_mounts():
     """App should mount with board, status bar, header, and footer."""
     from womtrees.tui.app import WomtreesApp
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 
@@ -214,7 +247,12 @@ async def test_app_mounts():
                     board = app.query_one("#board", KanbanBoard)
                     assert board is not None
                     assert len(board.columns) == 4
-                    assert list(board.columns.keys()) == ["todo", "working", "input", "review"]
+                    assert list(board.columns.keys()) == [
+                        "todo",
+                        "working",
+                        "input",
+                        "review",
+                    ]
 
 
 @pytest.mark.asyncio
@@ -228,8 +266,12 @@ async def test_app_shows_items():
         _make_item(id=3, status="review", branch="feat/c"),
     ]
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 
@@ -255,8 +297,12 @@ async def test_app_unmanaged_sessions():
         _make_session(id=1, work_item_id=None, state="working", branch="main"),
     ]
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 
@@ -274,8 +320,12 @@ async def test_app_toggle_grouping():
     """Pressing 'g' should toggle grouping and show notification."""
     from womtrees.tui.app import WomtreesApp
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 
@@ -302,8 +352,12 @@ async def test_app_status_bar():
         _make_item(id=3, status="working"),
     ]
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 
@@ -329,8 +383,12 @@ async def test_app_column_navigation():
         _make_item(id=3, status="review", branch="feat/c"),
     ]
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 
@@ -357,8 +415,12 @@ async def test_app_help_dialog():
     from womtrees.tui.app import WomtreesApp
     from womtrees.tui.dialogs import HelpDialog
 
-    with patch("womtrees.tui.app.get_connection") as mock_conn, \
-         patch("womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")):
+    with (
+        patch("womtrees.tui.app.get_connection") as mock_conn,
+        patch(
+            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+        ),
+    ):
         conn = MagicMock()
         mock_conn.return_value = conn
 

@@ -13,6 +13,11 @@ from womtrees.db import (
     get_work_item,
     update_work_item,
 )
+from womtrees.services.workitem import (
+    DuplicateBranchError,
+    OpenPullRequestError,
+    edit_work_item,
+)
 from womtrees.worktree import (
     create_worktree,
     remove_worktree,
@@ -295,3 +300,31 @@ def delete(item_id: int, force: bool) -> None:
     delete_work_item(conn, item_id)
     conn.close()
     click.echo(f"Deleted #{item_id}")
+
+
+@click.command()
+@click.argument("item_id", type=int)
+@click.option("-n", "--name", default=None, help="New name for the work item.")
+@click.option("-b", "--branch", default=None, help="New branch name.")
+def edit(item_id: int, name: str | None, branch: str | None) -> None:
+    """Edit a work item's name or branch."""
+    if name is None and branch is None:
+        raise click.ClickException("Provide --name and/or --branch.")
+
+    conn = get_connection()
+    item = get_work_item(conn, item_id)
+    if item is None:
+        conn.close()
+        raise click.ClickException(f"WorkItem #{item_id} not found.")
+
+    try:
+        changed = edit_work_item(conn, item, name=name, branch=branch)
+    except (DuplicateBranchError, OpenPullRequestError) as e:
+        conn.close()
+        raise click.ClickException(str(e))
+
+    conn.close()
+    if changed:
+        click.echo(f"Updated #{item_id}")
+    else:
+        click.echo("No changes.")
