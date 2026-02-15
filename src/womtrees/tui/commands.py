@@ -26,18 +26,9 @@ class WorkItemCommands(Provider):
 
         # Card-context commands (require a highlighted WorkItemCard)
         if is_work_item:
-            if status == "review":
-                commands.append(
-                    ("Merge", "Merge branch into default branch", "action_merge_item")
-                )
-                commands.append(
-                    ("Rebase", "Rebase branch onto default branch", "_cmd_rebase")
-                )
-            if status in ("working", "input", "review"):
-                commands.append(("Git Push", "Push branch to remote", "_cmd_git_push"))
             if status != "done":
                 commands.append(
-                    ("Git Pull", "Pull latest changes from remote", "_cmd_git_pull")
+                    ("Git Actions", "Open git actions menu", "action_git_actions")
                 )
             commands.append(
                 ("Edit", "Edit work item name and branch", "action_edit_item")
@@ -48,7 +39,11 @@ class WorkItemCommands(Provider):
         commands.append(("Create", "Create a new work item", "action_create_item"))
         commands.append(("Create TODO", "Create a new TODO item", "action_todo_item"))
         commands.append(
-            ("Toggle Grouping", "Toggle repo grouping", "action_toggle_grouping")
+            (
+                "Toggle group by repository",
+                "Toggle repo grouping on/off",
+                "action_toggle_grouping",
+            )
         )
         commands.append(("Help", "Show help", "action_help"))
 
