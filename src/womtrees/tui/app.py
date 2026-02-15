@@ -593,14 +593,14 @@ class WomtreesApp(App):
 
         conn = get_connection()
         item = get_work_item(conn, item_id)
-        if item is None:
+        if item is None or not item.worktree_path:
             conn.close()
             return
 
         try:
-            rebase_branch(item.repo_path, item.branch)
+            rebase_branch(item.worktree_path, item.repo_path)
         except subprocess.CalledProcessError:
-            abort_rebase(item.repo_path)
+            abort_rebase(item.worktree_path)
             conn.close()
             msg = (
                 f"Rebase of #{item_id} ({item.branch}) failed due to conflicts.\n"
@@ -619,7 +619,7 @@ class WomtreesApp(App):
         if not confirmed:
             return
 
-        from womtrees.worktree import auto_rebase_branch, get_default_branch
+        from womtrees.worktree import get_default_branch
 
         conn = get_connection()
         item = get_work_item(conn, item_id)
@@ -635,40 +635,26 @@ class WomtreesApp(App):
         default_branch = get_default_branch(item.repo_path)
         conn.close()
 
-        self.notify(f"#{item_id} auto-rebasing with claude -p...")
-
-        def run_auto_rebase() -> str:
-            return auto_rebase_branch(item.worktree_path, item.branch, default_branch)
-
-        self.run_worker(
-            run_auto_rebase,
-            name=f"auto-rebase-{item_id}",
-            exit_on_error=False,
+        prompt = (
+            f"Rebase branch '{item.branch}' onto '{default_branch}'. "
+            f"Run `git rebase {default_branch}` and resolve any merge conflicts "
+            f"that arise. Continue the rebase until it completes successfully. "
+            f"Do not commit anything beyond what the rebase requires."
         )
 
-    def on_worker_state_changed(self, event: object) -> None:
-        """Handle worker completion for auto-rebase."""
-        from textual.worker import Worker
+        self.push_screen(
+            ClaudeStreamDialog(
+                title=f"Auto-rebasing #{item_id}",
+                prompt=prompt,
+                cwd=item.worktree_path,
+            ),
+            lambda _result: self._on_auto_rebase_done(item_id),
+        )
 
-        worker = getattr(event, "worker", None)
-        if not isinstance(worker, Worker):
-            return
-        if not worker.name or not worker.name.startswith("auto-rebase-"):
-            return
-        if not worker.is_finished:
-            return
-
-        item_id = worker.name.removeprefix("auto-rebase-")
-        if worker.error:
-            stderr = ""
-            if isinstance(worker.error, subprocess.CalledProcessError):
-                stderr = worker.error.stderr.strip()
-            self.notify(
-                f"#{item_id} auto-rebase failed: {stderr or worker.error}",
-                severity="error",
-            )
-        else:
-            self.notify(f"#{item_id} rebased — press [m] to merge")
+    def _on_auto_rebase_done(self, item_id: int) -> None:
+        """Handle auto-rebase stream dialog dismissal."""
+        self.notify(f"#{item_id} rebased — press [m] to merge")
+        self._refresh_board()
 
     def action_delete_item(self) -> None:
         card = self._get_focused_card()
