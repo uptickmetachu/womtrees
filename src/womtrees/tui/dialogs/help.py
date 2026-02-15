@@ -43,7 +43,6 @@ class HelpDialog(ModalScreen):
             yield Label("e         Edit name/branch")
             yield Label("c         Create & launch")
             yield Label("t         Create TODO")
-            yield Label("r         Move to review")
             yield Label("m         Merge into default branch")
             yield Label("p         Create PR via Claude")
             yield Label("d         Delete")
