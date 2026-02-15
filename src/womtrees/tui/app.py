@@ -280,7 +280,7 @@ class WomtreesApp(App):
     def action_jump(self) -> None:
         """Jump to the tmux session for the focused card."""
         from womtrees import tmux
-        from womtrees.cli import _maybe_resume_claude
+        from womtrees.cli import _maybe_resume_claude, _restore_tmux_session
 
         card = self._get_focused_card()
         if card is None:
@@ -288,11 +288,27 @@ class WomtreesApp(App):
 
         session_name = None
         work_item_id = None
-        if isinstance(card, WorkItemCard) and card.work_item.tmux_session:
+        if isinstance(card, WorkItemCard):
             session_name = card.work_item.tmux_session
             work_item_id = card.work_item.id
         elif isinstance(card, UnmanagedCard) and card.sessions:
             session_name = card.sessions[0].tmux_session
+
+        # Restore missing tmux session for managed work items
+        if isinstance(card, WorkItemCard) and (
+            not session_name or not tmux.session_exists(session_name)
+        ):
+            item = card.work_item
+            if item.worktree_path or item.repo_path:
+                conn = get_connection()
+                try:
+                    session_name = _restore_tmux_session(conn, item)
+                    self.notify(f"Restored tmux session for #{item.id}")
+                finally:
+                    conn.close()
+            else:
+                self.notify("No worktree path to restore session", severity="error")
+                return
 
         if session_name and tmux.session_exists(session_name):
             # Resume dead Claude session before attaching
