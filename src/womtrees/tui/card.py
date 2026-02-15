@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from textual.widget import Widget
 from textual.reactive import reactive
@@ -99,7 +100,7 @@ class WorkItemCard(Widget, can_focus=True):
         sessions: list[ClaudeSession] | None = None,
         pull_requests: list[PullRequest] | None = None,
         git_stats: GitStats | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.work_item = work_item
@@ -189,7 +190,7 @@ class UnmanagedCard(Widget, can_focus=True):
         self,
         branch: str,
         sessions: list[ClaudeSession],
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.branch = branch

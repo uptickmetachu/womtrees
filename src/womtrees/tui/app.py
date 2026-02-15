@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -32,7 +33,7 @@ from womtrees.tui.dialogs import (
     MergeDialog,
     RebaseDialog,
 )
-from womtrees.models import GitStats
+from womtrees.models import ClaudeSession, GitStats, WorkItem
 from womtrees.worktree import (
     get_current_repo,
     get_diff_stats,
@@ -41,7 +42,7 @@ from womtrees.worktree import (
 )
 
 
-class WomtreesApp(App):
+class WomtreesApp(App[None]):
     """Kanban board TUI for womtrees."""
 
     COMMANDS = {WorkItemCommands}
@@ -82,7 +83,7 @@ class WomtreesApp(App):
         Binding("p", "create_pr", "PR", show=True),
     ]
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.group_by_repo = True
         self.active_column_idx = 0
@@ -198,7 +199,7 @@ class WomtreesApp(App):
                     card.focus()
                     return
 
-    def _update_status_bar(self, items, sessions) -> None:
+    def _update_status_bar(self, items: list[WorkItem], sessions: list[ClaudeSession]) -> None:
         counts = {"todo": 0, "working": 0, "input": 0, "review": 0, "done": 0}
         for item in items:
             counts[item.status] = counts.get(item.status, 0) + 1
@@ -385,7 +386,7 @@ class WomtreesApp(App):
             self._on_create_dialog,
         )
 
-    def _on_create_dialog(self, result: dict | None) -> None:
+    def _on_create_dialog(self, result: dict[str, Any] | None) -> None:
         if result is None:
             return
 
@@ -444,7 +445,7 @@ class WomtreesApp(App):
             lambda result: self._on_edit_dialog(result, item.id),
         )
 
-    def _on_edit_dialog(self, result: dict | None, item_id: int) -> None:
+    def _on_edit_dialog(self, result: dict[str, Any] | None, item_id: int) -> None:
         if result is None:
             return
 
@@ -565,7 +566,7 @@ class WomtreesApp(App):
         elif action == "pull":
             self._do_pull(item)
 
-    def _do_merge(self, item) -> None:
+    def _do_merge(self, item: WorkItem) -> None:
         """Trigger merge flow for a work item."""
         if item.status != "review":
             self.notify("Can only merge REVIEW items", severity="warning")
@@ -580,7 +581,7 @@ class WomtreesApp(App):
             lambda confirmed: self._on_merge_confirmed(confirmed, item.id),
         )
 
-    def _do_commit(self, item) -> None:
+    def _do_commit(self, item: WorkItem) -> None:
         """Open tmux session to commit interactively."""
         if not item.worktree_path:
             self.notify("No worktree path", severity="error")
@@ -600,14 +601,14 @@ class WomtreesApp(App):
             lambda _result: self._refresh_board(),
         )
 
-    def _do_rebase(self, item) -> None:
+    def _do_rebase(self, item: WorkItem) -> None:
         """Trigger rebase flow for a work item."""
         if item.status != "review":
             self.notify("Can only rebase REVIEW items", severity="warning")
             return
         self._cmd_rebase_item(item)
 
-    def _do_push(self, item) -> None:
+    def _do_push(self, item: WorkItem) -> None:
         """Push the item's branch to remote."""
         if item.status not in ("working", "input", "review"):
             self.notify("Cannot push in this state", severity="warning")
@@ -627,7 +628,7 @@ class WomtreesApp(App):
         except subprocess.CalledProcessError as e:
             self.notify(f"Push failed: {e.stderr.strip()}", severity="error")
 
-    def _do_pull(self, item) -> None:
+    def _do_pull(self, item: WorkItem) -> None:
         """Pull latest changes for the item's branch."""
         if item.status == "done":
             self.notify("Cannot pull for DONE items", severity="warning")
@@ -834,7 +835,7 @@ class WomtreesApp(App):
 
     def _detect_and_store_pr(
         self, item_id: int, repo_path: str, branch: str
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """Detect a newly-created PR and store it in the DB."""
         from womtrees.services.github import detect_pr
 
@@ -858,7 +859,7 @@ class WomtreesApp(App):
 
         return pr_info
 
-    def _on_claude_dialog_dismiss(self, result: dict | None) -> None:
+    def _on_claude_dialog_dismiss(self, result: dict[str, Any] | None) -> None:
         """Handle ClaudeStreamDialog dismissal."""
         if result is not None:
             url = result.get("url", f"PR #{result.get('number', '?')}")
@@ -921,7 +922,7 @@ class WomtreesApp(App):
             return
         self._cmd_rebase_item(item)
 
-    def _cmd_rebase_item(self, item) -> None:
+    def _cmd_rebase_item(self, item: WorkItem) -> None:
         """Rebase a specific item's branch onto default branch."""
         from womtrees.worktree import get_default_branch
 

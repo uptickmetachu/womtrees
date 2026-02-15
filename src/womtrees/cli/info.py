@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import sqlite3
 import subprocess
 
 import click
 
 from womtrees.config import get_config
+from womtrees.models import ClaudeSession, WorkItem
 from womtrees.db import (
     connection,
     get_claude_session,
@@ -26,7 +28,7 @@ def list_cmd() -> None:
             return
         all_sessions = list_claude_sessions(conn)
 
-    sessions_by_item: dict[int | None, list] = {}
+    sessions_by_item: dict[int | None, list[ClaudeSession]] = {}
     for s in all_sessions:
         sessions_by_item.setdefault(s.work_item_id, []).append(s)
 
@@ -51,7 +53,7 @@ def list_cmd() -> None:
         )
 
 
-def _format_tmux_status(conn) -> str:
+def _format_tmux_status(conn: sqlite3.Connection) -> str:
     """Format a compact status string for tmux status-right."""
     sessions = list_claude_sessions(conn, state="waiting")
     if not sessions:
@@ -156,7 +158,7 @@ def sessions_cmd() -> None:
         )
 
 
-def _restore_tmux_session(conn, item) -> str:
+def _restore_tmux_session(conn: sqlite3.Connection, item: WorkItem) -> str:
     """Recreate a missing tmux session for a work item.
 
     Creates a new tmux session in the worktree directory, sets the
@@ -173,7 +175,7 @@ def _restore_tmux_session(conn, item) -> str:
     return session_name
 
 
-def _maybe_resume_claude(conn, item_id: int) -> None:
+def _maybe_resume_claude(conn: sqlite3.Connection, item_id: int) -> None:
     """If the Claude session for a work item is dead, relaunch it.
 
     Only resumes if ALL tracked Claude sessions are dead — avoids

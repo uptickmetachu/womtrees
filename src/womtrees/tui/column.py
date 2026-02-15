@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
@@ -46,10 +48,10 @@ class KanbanColumn(VerticalScroll):
     }
     """
 
-    def __init__(self, status: str, **kwargs) -> None:
+    def __init__(self, status: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.status = status
-        self.cards: list[WorkItemCard | UnmanagedCard] = []
+        self.cards: list[WorkItemCard | UnmanagedCard | Static] = []
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -134,9 +136,9 @@ class KanbanColumn(VerticalScroll):
                 for s in repo_unmanaged:
                     by_branch.setdefault(s.branch, []).append(s)
                 for branch, branch_sessions in by_branch.items():
-                    card = UnmanagedCard(branch, branch_sessions)
-                    self.mount(card)
-                    self.cards.append(card)
+                    ucard = UnmanagedCard(branch, branch_sessions)
+                    self.mount(ucard)
+                    self.cards.append(ucard)
 
     def _mount_flat(
         self,
@@ -159,9 +161,9 @@ class KanbanColumn(VerticalScroll):
             for s in unmanaged_sessions:
                 by_branch.setdefault(s.branch, []).append(s)
             for branch, branch_sessions in by_branch.items():
-                card = UnmanagedCard(branch, branch_sessions)
-                self.mount(card)
-                self.cards.append(card)
+                ucard = UnmanagedCard(branch, branch_sessions)
+                self.mount(ucard)
+                self.cards.append(ucard)
 
     def get_focusable_cards(self) -> list[WorkItemCard | UnmanagedCard]:
         """Return all focusable card widgets in this column."""

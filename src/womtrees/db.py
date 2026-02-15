@@ -236,7 +236,10 @@ def create_work_item(
         (repo_name, repo_path, branch, name, prompt, status, now, now),
     )
     conn.commit()
-    return get_work_item(conn, cursor.lastrowid)
+    assert cursor.lastrowid is not None
+    item = get_work_item(conn, cursor.lastrowid)
+    assert item is not None
+    return item
 
 
 def get_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem | None:
@@ -253,7 +256,7 @@ def list_work_items(
     status: str | None = None,
 ) -> list[WorkItem]:
     query = "SELECT * FROM work_items WHERE 1=1"
-    params: list = []
+    params: list[str] = []
 
     if repo_name is not None:
         query += " AND repo_name = ?"
@@ -269,7 +272,7 @@ def list_work_items(
 
 
 def update_work_item(
-    conn: sqlite3.Connection, item_id: int, **fields
+    conn: sqlite3.Connection, item_id: int, **fields: object
 ) -> WorkItem | None:
     if not fields:
         return get_work_item(conn, item_id)
@@ -327,7 +330,10 @@ def create_claude_session(
         ),
     )
     conn.commit()
-    return get_claude_session(conn, cursor.lastrowid)
+    assert cursor.lastrowid is not None
+    session = get_claude_session(conn, cursor.lastrowid)
+    assert session is not None
+    return session
 
 
 def get_claude_session(
@@ -347,7 +353,7 @@ def list_claude_sessions(
     state: str | None = None,
 ) -> list[ClaudeSession]:
     query = "SELECT * FROM claude_sessions WHERE 1=1"
-    params: list = []
+    params: list[int | str] = []
 
     if work_item_id is not None:
         query += " AND work_item_id = ?"
@@ -367,7 +373,7 @@ def list_claude_sessions(
 
 
 def update_claude_session(
-    conn: sqlite3.Connection, session_id: int, **fields
+    conn: sqlite3.Connection, session_id: int, **fields: object
 ) -> ClaudeSession | None:
     if not fields:
         return get_claude_session(conn, session_id)

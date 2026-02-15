@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label
 
 
-class HelpDialog(ModalScreen):
+class HelpDialog(ModalScreen[None]):
     """Help overlay showing keybindings."""
 
     BINDINGS = [("escape", "dismiss", "Close"), ("question_mark", "dismiss", "Close")]
@@ -53,5 +55,5 @@ class HelpDialog(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss()
 
-    def action_dismiss(self) -> None:
+    async def action_dismiss(self, result: Any = None) -> None:
         self.app.pop_screen()

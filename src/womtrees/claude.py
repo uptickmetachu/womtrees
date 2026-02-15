@@ -82,7 +82,7 @@ WOMTREE_HOOKS = {
 }
 
 
-def _is_wt_hook_entry(entry: dict) -> bool:
+def _is_wt_hook_entry(entry: dict[str, Any]) -> bool:
     """Check if a hook entry contains a wt hook command."""
     for handler in entry.get("hooks", []):
         if "wt hook" in handler.get("command", ""):
@@ -188,13 +188,13 @@ def install_global_hooks() -> None:
         json.dump(settings, f, indent=2)
 
 
-def detect_context() -> dict:
+def detect_context() -> dict[str, str | int | None]:
     """Gather context from the current environment for hook commands.
 
     Returns dict with: tmux_session, tmux_pane, repo_name, repo_path,
     branch, work_item_id (nullable), pid.
     """
-    context = {
+    context: dict[str, str | int | None] = {
         "tmux_session": None,
         "tmux_pane": None,
         "repo_name": None,
@@ -208,6 +208,7 @@ def detect_context() -> dict:
     context["tmux_pane"] = os.environ.get("TMUX_PANE", "")
 
     # Get tmux session name
+    tmux_session: str | None = None
     try:
         result = subprocess.run(
             ["tmux", "display-message", "-p", "#S"],
@@ -215,19 +216,20 @@ def detect_context() -> dict:
             text=True,
             check=True,
         )
-        context["tmux_session"] = result.stdout.strip()
+        tmux_session = result.stdout.strip()
+        context["tmux_session"] = tmux_session
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
     # Get work_item_id from tmux environment
-    if context["tmux_session"]:
+    if tmux_session:
         try:
             result = subprocess.run(
                 [
                     "tmux",
                     "show-environment",
                     "-t",
-                    context["tmux_session"],
+                    tmux_session,
                     "WOMTREE_WORK_ITEM_ID",
                 ],
                 capture_output=True,

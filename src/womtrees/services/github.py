@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from typing import Any
 
 
 class PRNotFoundError(Exception):
@@ -24,7 +25,7 @@ class GitHubUnavailableError(Exception):
         )
 
 
-def _detect_pr(repo_path: str, branch: str) -> dict | None:
+def _detect_pr(repo_path: str, branch: str) -> dict[str, Any] | None:
     """Detect an open PR for the given branch using `gh pr list`.
 
     Returns a dict with keys: number, state, url, owner, repo — or None.

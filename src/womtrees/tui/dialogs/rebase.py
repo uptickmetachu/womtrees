@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
@@ -39,7 +41,7 @@ class RebaseDialog(ModalScreen[bool]):
     }
     """
 
-    def __init__(self, message: str, **kwargs) -> None:
+    def __init__(self, message: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.message = message
 

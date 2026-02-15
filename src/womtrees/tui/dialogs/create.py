@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
@@ -7,7 +9,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, TextArea
 
 
-class CreateDialog(ModalScreen[dict | None]):
+class CreateDialog(ModalScreen[dict[str, Any] | None]):
     """Modal dialog for creating a new WorkItem."""
 
     BINDINGS = [
@@ -62,7 +64,7 @@ class CreateDialog(ModalScreen[dict | None]):
         mode: str = "create",
         repos: list[tuple[str, str]] | None = None,
         default_repo: tuple[str, str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.mode = mode  # "create" or "todo"
@@ -73,8 +75,8 @@ class CreateDialog(ModalScreen[dict | None]):
         title = "Create & Launch" if self.mode == "create" else "Create TODO"
 
         # Build repo select options
-        options: list[tuple[str, str | None]] = []
-        default_value = Select.BLANK
+        options: list[tuple[str, str]] = []
+        default_value: Any = Select.BLANK
         seen = set()
         for repo_name, repo_path in self.repos:
             key = (repo_name, repo_path)
@@ -141,7 +143,7 @@ class CreateDialog(ModalScreen[dict | None]):
             repo_name = resolved.name
             repo_path = str(resolved)
         elif repo_select.value is not Select.BLANK:
-            repo_path = repo_select.value
+            repo_path = str(repo_select.value)
             # Find repo_name from our options
             repo_name = Path(repo_path).name
             for rn, rp in self.repos:

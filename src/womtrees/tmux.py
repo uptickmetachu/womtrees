@@ -5,7 +5,7 @@ import re
 import subprocess
 
 
-def _run(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+def _run(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True, check=check)
 
 
