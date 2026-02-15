@@ -188,13 +188,13 @@ def install_global_hooks() -> None:
         json.dump(settings, f, indent=2)
 
 
-def detect_context() -> dict:
+def detect_context() -> dict[str, Any]:
     """Gather context from the current environment for hook commands.
 
     Returns dict with: tmux_session, tmux_pane, repo_name, repo_path,
     branch, work_item_id (nullable), pid.
     """
-    context = {
+    context: dict[str, Any] = {
         "tmux_session": None,
         "tmux_pane": None,
         "repo_name": None,

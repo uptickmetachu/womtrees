@@ -73,8 +73,8 @@ class CreateDialog(ModalScreen[dict | None]):
         title = "Create & Launch" if self.mode == "create" else "Create TODO"
 
         # Build repo select options
-        options: list[tuple[str, str | None]] = []
-        default_value = Select.BLANK
+        options: list[tuple[str, str]] = []
+        default_value: object = Select.BLANK
         seen = set()
         for repo_name, repo_path in self.repos:
             key = (repo_name, repo_path)
@@ -141,7 +141,7 @@ class CreateDialog(ModalScreen[dict | None]):
             repo_name = resolved.name
             repo_path = str(resolved)
         elif repo_select.value is not Select.BLANK:
-            repo_path = repo_select.value
+            repo_path = str(repo_select.value)
             # Find repo_name from our options
             repo_name = Path(repo_path).name
             for rn, rp in self.repos:

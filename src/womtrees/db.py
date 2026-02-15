@@ -236,7 +236,10 @@ def create_work_item(
         (repo_name, repo_path, branch, name, prompt, status, now, now),
     )
     conn.commit()
-    return get_work_item(conn, cursor.lastrowid)
+    assert cursor.lastrowid is not None
+    item = get_work_item(conn, cursor.lastrowid)
+    assert item is not None
+    return item
 
 
 def get_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem | None:
@@ -327,7 +330,10 @@ def create_claude_session(
         ),
     )
     conn.commit()
-    return get_claude_session(conn, cursor.lastrowid)
+    assert cursor.lastrowid is not None
+    session = get_claude_session(conn, cursor.lastrowid)
+    assert session is not None
+    return session
 
 
 def get_claude_session(
