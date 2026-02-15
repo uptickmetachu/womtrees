@@ -18,6 +18,7 @@ class GitActionsDialog(ModalScreen[str | None]):
         Binding("r", "select('rebase')", "Rebase", show=False, priority=True),
         Binding("p", "select('push')", "Push", show=False, priority=True),
         Binding("l", "select('pull')", "Pull", show=False, priority=True),
+        Binding("o", "select('create_pr')", "Create PR", show=False, priority=True),
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
@@ -149,6 +150,16 @@ class GitActionsDialog(ModalScreen[str | None]):
                 + ("" if can_pull else " [dim](not available)[/]"),
                 classes="git-action",
             )
+
+            can_create_pr = (
+                not self._pull_requests
+                and self._status in ("working", "input", "review")
+            )
+            if can_create_pr:
+                yield Static(
+                    "  create pr [$accent]\\[o][/]",
+                    classes="git-action",
+                )
 
             yield Button("Cancel (esc)", id="cancel-btn")
 
