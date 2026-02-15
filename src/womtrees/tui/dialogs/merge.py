@@ -11,7 +11,7 @@ class MergeDialog(ModalScreen[bool]):
     """Confirmation dialog for merging a branch."""
 
     BINDINGS = [
-        Binding("ctrl+enter", "confirm", "Confirm", show=False),
+        Binding("ctrl+s,ctrl+enter", "confirm", "Confirm", show=True, priority=True),
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
@@ -47,7 +47,7 @@ class MergeDialog(ModalScreen[bool]):
         with Vertical(id="dialog"):
             yield Label(self.message)
             with Grid(classes="buttons"):
-                yield Button("Merge", variant="success", id="confirm")
+                yield Button("Merge (ctrl+s)", variant="success", id="confirm")
                 yield Button("Cancel", variant="primary", id="cancel")
 
     def action_confirm(self) -> None:

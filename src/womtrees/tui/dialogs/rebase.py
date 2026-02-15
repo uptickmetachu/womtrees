@@ -11,7 +11,7 @@ class RebaseDialog(ModalScreen[bool]):
     """Prompt dialog offering to rebase a branch before merging."""
 
     BINDINGS = [
-        Binding("ctrl+enter", "confirm", "Confirm", show=False),
+        Binding("ctrl+s,ctrl+enter", "confirm", "Confirm", show=True, priority=True),
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
@@ -47,7 +47,7 @@ class RebaseDialog(ModalScreen[bool]):
         with Vertical(id="dialog"):
             yield Label(self.message)
             with Grid(classes="buttons"):
-                yield Button("Rebase", variant="warning", id="confirm")
+                yield Button("Rebase (ctrl+s)", variant="warning", id="confirm")
                 yield Button("Cancel", variant="primary", id="cancel")
 
     def action_confirm(self) -> None:

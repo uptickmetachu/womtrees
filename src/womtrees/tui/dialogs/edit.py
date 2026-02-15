@@ -3,7 +3,6 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
-from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, TextArea
 
@@ -12,7 +11,7 @@ class EditDialog(ModalScreen[dict | None]):
     """Modal dialog for editing a WorkItem's name, branch, and prompt."""
 
     BINDINGS = [
-        Binding("ctrl+enter", "submit", "Submit", show=False),
+        Binding("ctrl+s,ctrl+enter", "submit", "Submit", show=True, priority=True),
         Binding("escape", "cancel", "Cancel", show=False),
     ]
 
@@ -77,14 +76,8 @@ class EditDialog(ModalScreen[dict | None]):
                 yield Label("Prompt:")
                 yield TextArea(self.item_prompt, id="prompt-input")
             with Grid(classes="buttons"):
-                yield Button("Save", variant="primary", id="submit")
+                yield Button("Save (ctrl+s)", variant="primary", id="submit")
                 yield Button("Cancel", id="cancel")
-
-    def on_key(self, event: Key) -> None:
-        if event.key == "ctrl+enter":
-            event.prevent_default()
-            event.stop()
-            self.action_submit()
 
     def action_submit(self) -> None:
         name = self.query_one("#name-input", Input).value.strip() or None
