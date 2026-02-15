@@ -17,16 +17,25 @@ def sanitize_branch_name(branch: str) -> str:
 
 
 def get_current_repo() -> tuple[str, str] | None:
-    """Return (repo_name, repo_path) if cwd is inside a git repo."""
+    """Return (repo_name, repo_path) if cwd is inside a git repo.
+
+    When inside a worktree, resolves to the main repository (not the worktree).
+    """
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
+            ["git", "rev-parse", "--git-common-dir"],
             capture_output=True,
             text=True,
             check=True,
         )
-        repo_path = result.stdout.strip()
-        repo_name = Path(repo_path).name
+        git_common_dir = Path(result.stdout.strip())
+        if not git_common_dir.is_absolute():
+            # In a normal (non-worktree) repo, git returns relative ".git"
+            git_common_dir = (Path.cwd() / git_common_dir).resolve()
+        # --git-common-dir returns the .git dir (e.g. /path/to/repo/.git)
+        # The repo root is its parent.
+        repo_path = str(git_common_dir.parent)
+        repo_name = git_common_dir.parent.name
         return repo_name, repo_path
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
