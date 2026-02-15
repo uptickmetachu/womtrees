@@ -261,6 +261,28 @@ def has_uncommitted_changes(worktree_path: str) -> bool:
     return bool(result.stdout.strip())
 
 
+def get_uncommitted_diff_stats(worktree_path: str) -> tuple[int, int]:
+    """Return (insertions, deletions) for uncommitted changes (staged + unstaged)."""
+    result = subprocess.run(
+        ["git", "-C", worktree_path, "diff", "HEAD", "--shortstat"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return (0, 0)
+
+    text = result.stdout.strip()
+    insertions = 0
+    deletions = 0
+    match = re.search(r"(\d+) insertion", text)
+    if match:
+        insertions = int(match.group(1))
+    match = re.search(r"(\d+) deletion", text)
+    if match:
+        deletions = int(match.group(1))
+    return (insertions, deletions)
+
+
 def merge_branch(repo_path: str, branch: str) -> str:
     """Merge a branch into the default branch from the main repo.
 

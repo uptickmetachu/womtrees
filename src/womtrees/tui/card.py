@@ -142,7 +142,17 @@ class WorkItemCard(Widget, can_focus=True):
                 f"[green]+{self.git_stats.insertions}[/] [red]-{self.git_stats.deletions}[/]"
             )
         if self.git_stats.uncommitted:
-            parts.append("[yellow]\\[uncommitted][/]")
+            uc = "[yellow]\\[uncommitted"
+            if (
+                self.git_stats.uncommitted_insertions
+                or self.git_stats.uncommitted_deletions
+            ):
+                uc += (
+                    f" +{self.git_stats.uncommitted_insertions}"
+                    f" -{self.git_stats.uncommitted_deletions}"
+                )
+            uc += "][/]"
+            parts.append(uc)
         return " ".join(parts)
 
 

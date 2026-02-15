@@ -317,7 +317,7 @@ async def test_app_unmanaged_sessions():
 
 @pytest.mark.asyncio
 async def test_app_toggle_grouping():
-    """Pressing 'g' should toggle grouping and show notification."""
+    """action_toggle_grouping should toggle grouping (available via command palette)."""
     from womtrees.tui.app import WomtreesApp
 
     with (
@@ -334,9 +334,9 @@ async def test_app_toggle_grouping():
                 app = WomtreesApp()
                 async with app.run_test(size=(120, 40)) as pilot:
                     assert app.group_by_repo is True
-                    await pilot.press("g")
+                    app.action_toggle_grouping()
                     assert app.group_by_repo is False
-                    await pilot.press("g")
+                    app.action_toggle_grouping()
                     assert app.group_by_repo is True
 
 
