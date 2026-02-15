@@ -3,7 +3,7 @@ name = "womtrees"
 version = "0.1.0"
 description = "Git worktree manager with tmux and Claude Code integration"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "click",
     "claude-agent-sdk",
@@ -22,8 +22,27 @@ packages = ["src/womtrees"]
 
 [dependency-groups]
 dev = [
+    "commitizen>=3.13.0",
     "mypy>=1.19.1",
+    "pre-commit>=3.8.0",
     "pytest",
     "pytest-asyncio",
     "ruff>=0.15.1",
 ]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "S101", # Use of `assert` detected
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
