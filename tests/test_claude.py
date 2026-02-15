@@ -83,7 +83,10 @@ def test_detect_context(mock_run):
             result.stdout = "WOMTREE_WORK_ITEM_ID=42\n"
             result.returncode = 0
         elif args[:2] == ["git", "rev-parse"]:
-            result.stdout = "/home/user/myrepo\n"
+            if "--git-common-dir" in args:
+                result.stdout = "/home/user/myrepo/.git\n"
+            else:
+                result.stdout = "/home/user/myrepo\n"
             result.returncode = 0
         elif args[:2] == ["git", "branch"]:
             result.stdout = "feat/auth\n"
