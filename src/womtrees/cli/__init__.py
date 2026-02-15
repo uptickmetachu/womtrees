@@ -20,7 +20,6 @@ from womtrees.cli.info import (
     status,
 )
 from womtrees.cli.items import (
-    _start_work_item,
     create,
     delete,
     done,
@@ -61,4 +60,4 @@ cli.add_command(sqlite_cmd)
 cli.add_command(config)
 
 # Re-export for backward compatibility (used by TUI)
-__all__ = ["cli", "_start_work_item", "_maybe_resume_claude", "_restore_tmux_session"]
+__all__ = ["cli", "_maybe_resume_claude", "_restore_tmux_session"]

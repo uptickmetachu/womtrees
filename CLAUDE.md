@@ -33,33 +33,36 @@ uv run mypy src/         # Type check
 
 ## Architecture
 
-**Data flow:** CLI command → `db.py` (SQLite) → `worktree.py`/`tmux.py` (subprocess) → `claude.py` (hooks)
+**Data flow:** CLI command → `services/` (business logic) → `db.py` (SQLite) → `worktree.py`/`tmux.py` (subprocess) → `claude.py` (hooks)
 
 **Key modules in `src/womtrees/`:**
-- `cli.py` — Click command group; all commands + `hook` subgroup for Claude integration
-- `db.py` — All DB access; plain SQL, WAL mode, migration system (`SCHEMA_VERSION`), returns dataclasses
-- `models.py` — `WorkItem` and `ClaudeSession` dataclasses
+- `cli/` — Click commands split across `items.py` (CRUD), `info.py` (list/status/attach), `hooks.py`, `admin.py`, `utils.py`
+- `services/workitem.py` — Business logic for work item lifecycle (create, start, review, done, delete, merge, edit). Raises typed exceptions (`WorkItemNotFoundError`, `InvalidStateError`, `DuplicateBranchError`, `OpenPullRequestError`). CLI and TUI are thin callers.
+- `services/github.py` — GitHub PR detection/management via `gh` CLI. Exceptions: `PRNotFoundError`, `GitHubUnavailableError`.
+- `db.py` — All DB access; plain SQL, WAL mode, migration system (`SCHEMA_VERSION`), returns dataclasses. Use `connection()` context manager (or `get_connection()` for long-lived connections).
+- `models.py` — `WorkItem`, `ClaudeSession`, `PullRequest`, `GitStats` dataclasses
 - `worktree.py` — Git worktree create/remove/merge/list; repo detection
 - `tmux.py` — Tmux session/pane management; send-keys, attach, split
 - `claude.py` — Context detection (reads `$TMUX_PANE`, resolves work item from tmux env)
 - `config.py` — TOML config loading with typed `Config` dataclass
-- `tui/` — Textual app: `WomtreesApp` → `KanbanBoard` → `KanbanColumn` → `WorkItemCard` + `dialogs.py`
+- `tui/app.py` — Textual `WomtreesApp` with kanban board, vim-style navigation, dialog callbacks
+- `tui/dialogs/` — Modal dialogs split into individual files: `create.py`, `edit.py`, `delete.py`, `merge.py`, `rebase.py`, `auto_rebase.py`, `claude_stream.py`, `help.py`. Re-exported from `tui/dialogs/__init__.py`.
 
 **State machines:**
 - WorkItem: `todo` → `working` → `input`/`review` → `done`
 - ClaudeSession: `working` → `waiting` → `done`
 - Hook commands (`wt hook heartbeat|input|stop|mark-done`) drive state transitions
 
-**DB schema:** Two main tables — `work_items` (repo, branch, worktree path, tmux session, status) and `claude_sessions` (FK to work_item, pane, pid, state, prompt). Migrations in `db.py` `MIGRATIONS` dict.
+**DB schema:** Three tables — `work_items` (repo, branch, worktree path, tmux session, status), `claude_sessions` (FK to work_item, pane, pid, state, prompt), `pull_requests` (FK to work_item, number, status, url). Migrations in `db.py` `MIGRATIONS` dict.
 
 ## Testing Patterns
 - CLI tests use `click.testing.CliRunner`
-- Patch `db.get_connection()` with a temp in-memory DB
-- Patch `worktree.get_current_repo()` to isolate context
+- Patch `womtrees.db.get_connection` with a temp DB factory (the `connection()` context manager calls `get_connection()` internally, so one patch covers both)
+- Patch `womtrees.cli.utils.get_current_repo` to isolate context
+- Service functions that use `create_worktree`/`remove_worktree` — patch at `womtrees.services.workitem.create_worktree`
 - See existing fixtures in `tests/` for patterns
 
 ## Claude Hook System
 - `wt hook install` registers hooks in `~/.claude/settings.json` (UserPromptSubmit, PostToolUse, Notification, Stop)
 - Hooks call back into `wt hook heartbeat|input|stop` to update session state
 - `claude.py` detects context via tmux pane env vars → resolves work item ID
-

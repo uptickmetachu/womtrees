@@ -6,8 +6,8 @@ import click
 
 from womtrees.config import get_config
 from womtrees.db import (
+    connection,
     get_claude_session,
-    get_connection,
     get_work_item,
     list_claude_sessions,
     list_work_items,
@@ -19,17 +19,12 @@ from womtrees.db import (
 @click.command("list")
 def list_cmd() -> None:
     """List work items with Claude session info."""
-    conn = get_connection()
-    items = list_work_items(conn)
-
-    if not items:
-        conn.close()
-        click.echo("No work items found.")
-        return
-
-    # Gather Claude sessions per work item
-    all_sessions = list_claude_sessions(conn)
-    conn.close()
+    with connection() as conn:
+        items = list_work_items(conn)
+        if not items:
+            click.echo("No work items found.")
+            return
+        all_sessions = list_claude_sessions(conn)
 
     sessions_by_item: dict[int | None, list] = {}
     for s in all_sessions:
@@ -92,40 +87,34 @@ def _format_tmux_status(conn) -> str:
 )
 def status(item_id: int | None, tmux_mode: bool) -> None:
     """Show status of work items."""
-    conn = get_connection()
+    with connection() as conn:
+        if tmux_mode:
+            click.echo(_format_tmux_status(conn))
+            return
 
-    if tmux_mode:
-        click.echo(_format_tmux_status(conn))
-        conn.close()
-        return
+        if item_id is not None:
+            item = get_work_item(conn, item_id)
+            if item is None:
+                raise click.ClickException(f"WorkItem #{item_id} not found.")
 
-    if item_id is not None:
-        item = get_work_item(conn, item_id)
-        if item is None:
-            conn.close()
-            raise click.ClickException(f"WorkItem #{item_id} not found.")
+            sessions = list_claude_sessions(conn, work_item_id=item_id)
 
-        sessions = list_claude_sessions(conn, work_item_id=item_id)
-        conn.close()
+            click.echo(f"WorkItem #{item.id}")
+            click.echo(f"  Repo:     {item.repo_name}")
+            click.echo(f"  Branch:   {item.branch}")
+            click.echo(f"  Status:   {item.status}")
+            click.echo(f"  Path:     {item.worktree_path or '(not created)'}")
+            click.echo(f"  Tmux:     {item.tmux_session or '(none)'}")
+            click.echo(f"  Prompt:   {item.prompt or '(none)'}")
+            click.echo(f"  Created:  {item.created_at}")
+            click.echo(f"  Updated:  {item.updated_at}")
+            if sessions:
+                click.echo("  Claude Sessions:")
+                for s in sessions:
+                    click.echo(f"    C{s.id}: {s.state} (pane {s.tmux_pane})")
+            return
 
-        click.echo(f"WorkItem #{item.id}")
-        click.echo(f"  Repo:     {item.repo_name}")
-        click.echo(f"  Branch:   {item.branch}")
-        click.echo(f"  Status:   {item.status}")
-        click.echo(f"  Path:     {item.worktree_path or '(not created)'}")
-        click.echo(f"  Tmux:     {item.tmux_session or '(none)'}")
-        click.echo(f"  Prompt:   {item.prompt or '(none)'}")
-        click.echo(f"  Created:  {item.created_at}")
-        click.echo(f"  Updated:  {item.updated_at}")
-        if sessions:
-            click.echo("  Claude Sessions:")
-            for s in sessions:
-                click.echo(f"    C{s.id}: {s.state} (pane {s.tmux_pane})")
-        return
-
-    items = list_work_items(conn)
-
-    conn.close()
+        items = list_work_items(conn)
 
     counts = {"todo": 0, "working": 0, "review": 0, "done": 0}
     for item in items:
@@ -142,16 +131,14 @@ def sessions_cmd() -> None:
     """List all Claude sessions."""
     from womtrees.claude import is_pid_alive
 
-    conn = get_connection()
-    sessions = list_claude_sessions(conn)
+    with connection() as conn:
+        sessions = list_claude_sessions(conn)
 
-    # Clean up stale sessions
-    for s in sessions:
-        if s.pid and s.state != "done" and not is_pid_alive(s.pid):
-            update_claude_session(conn, s.id, state="done")
-            s = s.__class__(**{**s.__dict__, "state": "done"})
-
-    conn.close()
+        # Clean up stale sessions
+        for s in sessions:
+            if s.pid and s.state != "done" and not is_pid_alive(s.pid):
+                update_claude_session(conn, s.id, state="done")
+                s = s.__class__(**{**s.__dict__, "state": "done"})
 
     if not sessions:
         click.echo("No Claude sessions found.")
@@ -248,25 +235,22 @@ def cycle(filter: str) -> None:
     """
     from womtrees import tmux
 
-    conn = get_connection()
-
-    # Gather matching work items with live tmux sessions
-    if filter == "all":
-        items = [
-            i
-            for i in list_work_items(conn)
-            if i.status != "done"
-            and i.tmux_session
-            and tmux.session_exists(i.tmux_session)
-        ]
-    else:
-        items = [
-            i
-            for i in list_work_items(conn, status=filter)
-            if i.tmux_session and tmux.session_exists(i.tmux_session)
-        ]
-
-    conn.close()
+    with connection() as conn:
+        # Gather matching work items with live tmux sessions
+        if filter == "all":
+            items = [
+                i
+                for i in list_work_items(conn)
+                if i.status != "done"
+                and i.tmux_session
+                and tmux.session_exists(i.tmux_session)
+            ]
+        else:
+            items = [
+                i
+                for i in list_work_items(conn, status=filter)
+                if i.tmux_session and tmux.session_exists(i.tmux_session)
+            ]
 
     if not items:
         raise click.ClickException(f"No active tmux sessions matching '{filter}'.")
@@ -314,36 +298,33 @@ def attach(item_id: int, session_id: int | None) -> None:
     """Attach to a work item's tmux session."""
     from womtrees import tmux
 
-    conn = get_connection()
-    item = get_work_item(conn, item_id)
-
-    if item is None:
-        conn.close()
-        raise click.ClickException(f"WorkItem #{item_id} not found.")
-    if not item.tmux_session or not tmux.session_exists(item.tmux_session):
-        if not item.worktree_path and not item.repo_path:
-            conn.close()
-            raise click.ClickException(
-                f"WorkItem #{item_id} has no tmux session and no worktree path to restore into."
-            )
-        session_name = _restore_tmux_session(conn, item)
-        click.echo(f"Restored tmux session '{session_name}' for #{item_id}")
-        # Reload item with updated tmux_session
+    with connection() as conn:
         item = get_work_item(conn, item_id)
-        assert item is not None
 
-    # Resume dead Claude session before attaching
-    _maybe_resume_claude(conn, item_id)
+        if item is None:
+            raise click.ClickException(f"WorkItem #{item_id} not found.")
+        if not item.tmux_session or not tmux.session_exists(item.tmux_session):
+            if not item.worktree_path and not item.repo_path:
+                raise click.ClickException(
+                    f"WorkItem #{item_id} has no tmux session and no worktree path to restore into."
+                )
+            session_name = _restore_tmux_session(conn, item)
+            click.echo(f"Restored tmux session '{session_name}' for #{item_id}")
+            # Reload item with updated tmux_session
+            item = get_work_item(conn, item_id)
+            assert item is not None
 
-    # At this point tmux_session is guaranteed to exist
-    assert item.tmux_session is not None
-    tmux_session = item.tmux_session
+        # Resume dead Claude session before attaching
+        _maybe_resume_claude(conn, item_id)
 
-    # If a specific Claude session is requested, select its pane
-    if session_id is not None:
-        session = get_claude_session(conn, session_id)
-        if session and session.tmux_pane:
-            tmux.select_pane(tmux_session, session.tmux_pane)
+        # At this point tmux_session is guaranteed to exist
+        assert item.tmux_session is not None
+        tmux_session = item.tmux_session
 
-    conn.close()
+        # If a specific Claude session is requested, select its pane
+        if session_id is not None:
+            session = get_claude_session(conn, session_id)
+            if session and session.tmux_pane:
+                tmux.select_pane(tmux_session, session.tmux_pane)
+
     tmux.attach(tmux_session)

@@ -3,9 +3,9 @@ from __future__ import annotations
 import click
 
 from womtrees.db import (
+    connection,
     create_claude_session,
     find_claude_session,
-    get_connection,
     get_work_item,
     update_claude_session,
     update_work_item,
@@ -57,9 +57,8 @@ def stop() -> None:
 @click.argument("session_id", type=int)
 def mark_done(session_id: int) -> None:
     """Mark a Claude session as done."""
-    conn = get_connection()
-    update_claude_session(conn, session_id, state="done")
-    conn.close()
+    with connection() as conn:
+        update_claude_session(conn, session_id, state="done")
 
 
 def _handle_hook(session_state: str, item_status: str) -> None:
@@ -89,37 +88,34 @@ def _handle_hook(session_state: str, item_status: str) -> None:
         except (json.JSONDecodeError, OSError):
             pass
 
-    conn = get_connection()
+    with connection() as conn:
+        # Try to find existing session
+        session = find_claude_session(conn, ctx["tmux_session"], ctx["tmux_pane"])
 
-    # Try to find existing session
-    session = find_claude_session(conn, ctx["tmux_session"], ctx["tmux_pane"])
+        if session:
+            update_fields = {"state": session_state, "pid": ctx["pid"]}
+            if claude_session_id:
+                update_fields["claude_session_id"] = claude_session_id
+            update_claude_session(conn, session.id, **update_fields)
+            work_item_id = session.work_item_id
+        else:
+            # Create new session
+            cs = create_claude_session(
+                conn,
+                repo_name=ctx["repo_name"] or "unknown",
+                repo_path=ctx["repo_path"] or "",
+                branch=ctx["branch"] or "unknown",
+                tmux_session=ctx["tmux_session"],
+                tmux_pane=ctx["tmux_pane"],
+                pid=ctx["pid"],
+                work_item_id=ctx["work_item_id"],
+                state=session_state,
+                claude_session_id=claude_session_id,
+            )
+            work_item_id = cs.work_item_id
 
-    if session:
-        update_fields = {"state": session_state, "pid": ctx["pid"]}
-        if claude_session_id:
-            update_fields["claude_session_id"] = claude_session_id
-        update_claude_session(conn, session.id, **update_fields)
-        work_item_id = session.work_item_id
-    else:
-        # Create new session
-        cs = create_claude_session(
-            conn,
-            repo_name=ctx["repo_name"] or "unknown",
-            repo_path=ctx["repo_path"] or "",
-            branch=ctx["branch"] or "unknown",
-            tmux_session=ctx["tmux_session"],
-            tmux_pane=ctx["tmux_pane"],
-            pid=ctx["pid"],
-            work_item_id=ctx["work_item_id"],
-            state=session_state,
-            claude_session_id=claude_session_id,
-        )
-        work_item_id = cs.work_item_id
-
-    # Drive work item status from hooks
-    if work_item_id is not None:
-        item = get_work_item(conn, work_item_id)
-        if item and item.status not in ("todo", "done"):
-            update_work_item(conn, work_item_id, status=item_status)
-
-    conn.close()
+        # Drive work item status from hooks
+        if work_item_id is not None:
+            item = get_work_item(conn, work_item_id)
+            if item and item.status not in ("todo", "done"):
+                update_work_item(conn, work_item_id, status=item_status)

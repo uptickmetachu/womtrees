@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -11,7 +11,6 @@ from womtrees.db import (
     _ensure_schema,
     create_claude_session,
     create_work_item,
-    find_claude_session,
     get_claude_session,
     get_work_item,
     list_claude_sessions,
@@ -52,7 +51,7 @@ def test_hook_heartbeat_creates_session(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
@@ -96,7 +95,7 @@ def test_hook_heartbeat_updates_existing(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
@@ -124,7 +123,7 @@ def test_hook_stop_sets_done(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "stop"])
@@ -151,7 +150,7 @@ def test_hook_input_sets_waiting(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "input"])
@@ -182,7 +181,7 @@ def test_hook_heartbeat_with_work_item(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
@@ -209,7 +208,7 @@ def test_hook_heartbeat_silent_without_tmux(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
@@ -236,7 +235,7 @@ def test_hook_mark_done(runner, db_conn):
         state="working",
     )
 
-    with patch("womtrees.cli.hooks.get_connection", get_conn_fn):
+    with patch("womtrees.db.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["hook", "mark-done", str(session.id)])
         assert result.exit_code == 0
 
@@ -270,7 +269,7 @@ def test_sessions_command(runner, db_conn):
     )
 
     with (
-        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.is_pid_alive", return_value=True),
     ):
         result = runner.invoke(cli, ["sessions"])
@@ -284,7 +283,7 @@ def test_sessions_empty(runner, db_conn):
     get_conn_fn, db_path = db_conn
 
     with (
-        patch("womtrees.cli.info.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
     ):
         result = runner.invoke(cli, ["sessions"])
         assert result.exit_code == 0
@@ -329,7 +328,7 @@ def test_hook_heartbeat_moves_item_to_working(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
@@ -369,7 +368,7 @@ def test_hook_input_moves_item_to_input(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "input"])
@@ -409,7 +408,7 @@ def test_hook_stop_moves_item_to_review(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "stop"])
@@ -449,7 +448,7 @@ def test_hook_skips_todo_items(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "stop"])
@@ -489,7 +488,7 @@ def test_hook_skips_done_items(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])
@@ -515,7 +514,7 @@ def test_hook_heartbeat_captures_session_id(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(
@@ -557,7 +556,7 @@ def test_hook_heartbeat_updates_session_id(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(
@@ -586,7 +585,7 @@ def test_hook_heartbeat_no_stdin(runner, db_conn):
     }
 
     with (
-        patch("womtrees.cli.hooks.get_connection", get_conn_fn),
+        patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(cli, ["hook", "heartbeat"])

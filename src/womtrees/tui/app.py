@@ -9,15 +9,12 @@ from textual.widgets import Footer, Header, Static
 from womtrees.config import get_config
 from womtrees.db import (
     create_pull_request,
-    create_work_item,
-    delete_work_item,
     get_connection,
     get_work_item,
     list_claude_sessions,
     list_pull_requests,
     list_repos,
     list_work_items,
-    update_work_item,
 )
 from womtrees.tui.board import KanbanBoard
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
@@ -324,6 +321,12 @@ class WomtreesApp(App):
 
     def action_start_item(self) -> None:
         """Start a TODO work item."""
+        from womtrees.services.workitem import (
+            InvalidStateError,
+            WorkItemNotFoundError,
+            start_work_item,
+        )
+
         card = self._get_focused_card()
         if not isinstance(card, WorkItemCard):
             return
@@ -331,55 +334,14 @@ class WomtreesApp(App):
             self.notify("Can only start TODO items", severity="warning")
             return
 
-        from womtrees.worktree import create_worktree, sanitize_branch_name
-        from womtrees import tmux
-
         config = get_config()
         conn = get_connection()
-        item = card.work_item
 
         try:
-            wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
-            session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
-            session_name, shell_pane_id = tmux.create_session(
-                session_name, str(wt_path)
-            )
-            tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item.id))
-            claude_pane_id = tmux.split_pane(
-                session_name, config.tmux_split, str(wt_path)
-            )
-            if config.tmux_claude_pane in ("left", "top"):
-                tmux.swap_pane(session_name)
-
-            claude_cmd = "claude"
-            if config.claude_args:
-                claude_cmd += f" {config.claude_args}"
-            if item.prompt:
-                escaped = item.prompt.replace("'", "'\\''")
-                claude_cmd += f" '{escaped}'"
-            tmux.send_keys(claude_pane_id, claude_cmd)
-
-            from womtrees.db import create_claude_session
-
-            create_claude_session(
-                conn,
-                item.repo_name,
-                item.repo_path,
-                item.branch,
-                tmux_session=session_name,
-                tmux_pane=claude_pane_id,
-                work_item_id=item.id,
-                prompt=item.prompt,
-            )
-
-            update_work_item(
-                conn,
-                item.id,
-                status="working",
-                worktree_path=str(wt_path),
-                tmux_session=session_name,
-            )
-            self.notify(f"Started #{item.id}")
+            start_work_item(conn, card.work_item.id, config)
+            self.notify(f"Started #{card.work_item.id}")
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            self.notify(str(e), severity="error")
         except Exception as e:
             self.notify(f"Failed to start: {e}", severity="error")
         finally:
@@ -412,11 +374,16 @@ class WomtreesApp(App):
         if result is None:
             return
 
+        from womtrees.services.workitem import (
+            create_work_item_todo,
+            start_work_item,
+        )
+
         repo_name = result["repo_name"]
         repo_path = result["repo_path"]
         conn = get_connection()
         try:
-            item = create_work_item(
+            item = create_work_item_todo(
                 conn,
                 repo_name,
                 repo_path,
@@ -432,9 +399,7 @@ class WomtreesApp(App):
         if result["mode"] == "create":
             config = get_config()
             try:
-                from womtrees.cli import _start_work_item
-
-                _start_work_item(conn, item.id, config)
+                start_work_item(conn, item.id, config)
                 self.notify(f"Created and started #{item.id}")
             except Exception as e:
                 self.notify(
@@ -494,6 +459,12 @@ class WomtreesApp(App):
             self._refresh_board()
 
     def action_review_item(self) -> None:
+        from womtrees.services.workitem import (
+            InvalidStateError,
+            WorkItemNotFoundError,
+            review_work_item,
+        )
+
         card = self._get_focused_card()
         if not isinstance(card, WorkItemCard):
             return
@@ -502,9 +473,13 @@ class WomtreesApp(App):
             return
 
         conn = get_connection()
-        update_work_item(conn, card.work_item.id, status="review")
-        conn.close()
-        self.notify(f"#{card.work_item.id} moved to review")
+        try:
+            review_work_item(conn, card.work_item.id)
+            self.notify(f"#{card.work_item.id} moved to review")
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            self.notify(str(e), severity="error")
+        finally:
+            conn.close()
         self._refresh_board()
 
     def action_merge_item(self) -> None:
@@ -531,19 +506,19 @@ class WomtreesApp(App):
         if not confirmed:
             return
 
-        from womtrees import tmux
-        from womtrees.worktree import RebaseRequiredError, merge_branch, remove_worktree
+        from womtrees.services.workitem import (
+            InvalidStateError,
+            WorkItemNotFoundError,
+            merge_work_item,
+        )
+        from womtrees.worktree import RebaseRequiredError
 
         conn = get_connection()
-        item = get_work_item(conn, item_id)
-        if item is None:
-            conn.close()
-            return
 
         try:
-            merge_branch(item.repo_path, item.branch)
+            merge_work_item(conn, item_id)
+            self.notify(f"#{item_id} merged and done")
         except RebaseRequiredError as e:
-            conn.close()
             msg = (
                 f"Cannot merge #{item_id} ({e.branch}).\n"
                 f"Branch is behind {e.default_branch} and needs a rebase."
@@ -552,37 +527,13 @@ class WomtreesApp(App):
                 RebaseDialog(msg),
                 lambda confirmed: self._on_rebase_confirmed(confirmed, item_id),
             )
-            return
+        except (WorkItemNotFoundError, InvalidStateError) as e:
+            self.notify(str(e), severity="error")
         except subprocess.CalledProcessError as e:
-            conn.close()
             self.notify(f"Merge failed: {e.stderr.strip()}", severity="error")
-            return
+        finally:
+            conn.close()
 
-        # Clean up tmux session
-        if item.tmux_session and tmux.session_exists(item.tmux_session):
-            tmux.kill_session(item.tmux_session)
-
-        # Clean up worktree
-        if item.worktree_path:
-            try:
-                remove_worktree(item.worktree_path)
-            except subprocess.CalledProcessError:
-                pass
-
-        # Delete the branch after merge
-        try:
-            subprocess.run(
-                ["git", "-C", item.repo_path, "branch", "-d", item.branch],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError:
-            pass
-
-        update_work_item(conn, item_id, status="done")
-        conn.close()
-        self.notify(f"#{item_id} merged and done")
         self._refresh_board()
 
     def _on_rebase_confirmed(self, confirmed: bool, item_id: int) -> None:
@@ -676,27 +627,21 @@ class WomtreesApp(App):
         if not confirmed:
             return
 
-        from womtrees import tmux
-        from womtrees.worktree import remove_worktree
+        from womtrees.services.workitem import (
+            WorkItemNotFoundError,
+            delete_work_item,
+        )
 
         conn = get_connection()
-        item = get_work_item(conn, item_id)
-        if item is None:
+        try:
+            delete_work_item(conn, item_id, force=True)
+            self.notify(f"Deleted #{item_id}")
+        except WorkItemNotFoundError as e:
+            self.notify(str(e), severity="error")
+        except Exception as e:
+            self.notify(f"Delete failed: {e}", severity="error")
+        finally:
             conn.close()
-            return
-
-        if item.tmux_session and tmux.session_exists(item.tmux_session):
-            tmux.kill_session(item.tmux_session)
-
-        if item.worktree_path:
-            try:
-                remove_worktree(item.worktree_path)
-            except subprocess.CalledProcessError:
-                pass
-
-        delete_work_item(conn, item_id)
-        conn.close()
-        self.notify(f"Deleted #{item_id}")
         self._refresh_board()
 
     # -- PR actions --
@@ -735,7 +680,7 @@ class WomtreesApp(App):
         self, item_id: int, repo_path: str, branch: str
     ) -> dict | None:
         """Detect a newly-created PR and store it in the DB."""
-        from womtrees.github import detect_pr
+        from womtrees.services.github import detect_pr
 
         pr_info = detect_pr(repo_path, branch)
         if pr_info is None:
