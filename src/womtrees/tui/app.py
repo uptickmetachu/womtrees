@@ -285,6 +285,11 @@ class WomtreesApp(App):
         if card is None:
             return
 
+        # Block jumping into TODO items — they must be started first
+        if isinstance(card, WorkItemCard) and card.work_item.status == "todo":
+            self.notify("Start the item first before jumping in", severity="warning")
+            return
+
         session_name = None
         work_item_id = None
         if isinstance(card, WorkItemCard):
@@ -452,7 +457,10 @@ class WomtreesApp(App):
 
         try:
             changed = edit_work_item(
-                conn, item, name=result["name"], branch=result["branch"],
+                conn,
+                item,
+                name=result["name"],
+                branch=result["branch"],
                 **prompt_kwargs,
             )
         except (DuplicateBranchError, InvalidStateError, OpenPullRequestError) as e:
