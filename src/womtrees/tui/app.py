@@ -5,6 +5,7 @@ import subprocess
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.events import DescendantFocus
 from textual.widgets import Footer, Header, Static
 from womtrees.config import get_config
 from womtrees.db import (
@@ -19,6 +20,7 @@ from womtrees.db import (
 from womtrees.tui.board import KanbanBoard
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 from womtrees.tui.column import KanbanColumn
+from womtrees.tui.commands import WorkItemCommands
 from womtrees.tui.dialogs import (
     AutoRebaseDialog,
     ClaudeStreamDialog,
@@ -36,6 +38,7 @@ from womtrees.worktree import get_current_repo, get_diff_stats, has_uncommitted_
 class WomtreesApp(App):
     """Kanban board TUI for womtrees."""
 
+    COMMANDS = {WorkItemCommands}
     TITLE = "womtrees"
 
     CSS = """
@@ -84,6 +87,12 @@ class WomtreesApp(App):
         self.group_by_repo = True
         self.active_column_idx = 0
         self.repo_context = get_current_repo()
+        self.last_focused_card: WorkItemCard | UnmanagedCard | None = None
+
+    def on_descendant_focus(self, event: DescendantFocus) -> None:
+        """Track the last focused card for the command palette."""
+        if isinstance(event.widget, (WorkItemCard, UnmanagedCard)):
+            self.last_focused_card = event.widget
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -727,6 +736,70 @@ class WomtreesApp(App):
             url = result.get("url", f"PR #{result.get('number', '?')}")
             self.notify(f"PR created: {url}")
         self._refresh_board()
+
+    # -- Git commands (command palette) --
+
+    def _cmd_git_push(self) -> None:
+        """Push the focused item's branch to remote."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+        item = card.work_item
+        if not item.worktree_path:
+            self.notify("No worktree path", severity="error")
+            return
+        try:
+            subprocess.run(
+                ["git", "push", "--set-upstream", "origin", item.branch],
+                cwd=item.worktree_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.notify(f"Pushed {item.branch}")
+        except subprocess.CalledProcessError as e:
+            self.notify(f"Push failed: {e.stderr.strip()}", severity="error")
+
+    def _cmd_git_pull(self) -> None:
+        """Pull latest changes for the focused item's branch."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+        item = card.work_item
+        if not item.worktree_path:
+            self.notify("No worktree path", severity="error")
+            return
+        try:
+            subprocess.run(
+                ["git", "pull"],
+                cwd=item.worktree_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.notify(f"Pulled {item.branch}")
+        except subprocess.CalledProcessError as e:
+            self.notify(f"Pull failed: {e.stderr.strip()}", severity="error")
+        self._refresh_board()
+
+    def _cmd_rebase(self) -> None:
+        """Rebase the focused item's branch onto default branch."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+        item = card.work_item
+        if item.status != "review":
+            self.notify("Can only rebase REVIEW items", severity="warning")
+            return
+
+        from womtrees.worktree import get_default_branch
+
+        target = get_default_branch(item.repo_path)
+        msg = f"Rebase #{item.id} ({item.branch}) onto {target}?"
+        self.push_screen(
+            RebaseDialog(msg),
+            lambda confirmed: self._on_rebase_confirmed(confirmed, item.id),
+        )
 
     # -- Toggle actions --
 
