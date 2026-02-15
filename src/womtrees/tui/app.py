@@ -79,7 +79,6 @@ class WomtreesApp(App):
         Binding("g", "git_actions", "Git", show=True),
         Binding("e", "edit_item", "Edit", show=True),
         Binding("d", "delete_item", "Delete", show=True),
-        Binding("p", "create_pr", "PR", show=True),
     ]
 
     def __init__(self, **kwargs) -> None:
@@ -564,6 +563,8 @@ class WomtreesApp(App):
             self._do_push(item)
         elif action == "pull":
             self._do_pull(item)
+        elif action == "create_pr":
+            self.action_create_pr()
 
     def _do_merge(self, item) -> None:
         """Trigger merge flow for a work item."""

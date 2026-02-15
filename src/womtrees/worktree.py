@@ -155,13 +155,6 @@ def needs_rebase(repo_path: str, branch: str) -> bool:
     """
     default_branch = get_default_branch(repo_path)
 
-    # Fetch latest refs so the check is up-to-date
-    subprocess.run(
-        ["git", "-C", repo_path, "fetch", "--quiet"],
-        capture_output=True,
-        text=True,
-    )
-
     # Check if default_branch is an ancestor of the feature branch.
     # If it is NOT an ancestor, the feature branch is behind and needs rebase.
     result = subprocess.run(
