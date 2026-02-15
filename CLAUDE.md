@@ -48,7 +48,7 @@ uv run mypy src/         # Type check
 - `tui/app.py` — Textual `WomtreesApp` with kanban board, vim-style navigation, dialog callbacks
 - `tui/dialogs/` — Modal dialogs split into individual files: `create.py`, `edit.py`, `delete.py`, `merge.py`, `rebase.py`, `auto_rebase.py`, `claude_stream.py`, `help.py`. Re-exported from `tui/dialogs/__init__.py`.
 
-**TUI dialog key bindings:** Textual's `Input`/`TextArea` widgets stop key event bubbling, so `BINDINGS` on a `ModalScreen` won't fire when those widgets have focus. Dialogs that need shortcut keys (e.g. `ctrl+enter` to submit) must use an `on_key()` handler to intercept events before widgets consume them. See `CreateDialog` and `EditDialog` for the pattern.
+**TUI dialog key bindings:** `ctrl+s` is the universal submit/confirm shortcut across all dialogs. Use `Binding("ctrl+s", ..., priority=True)` — priority bindings fire before focused widgets consume the event. Note: `ctrl+enter` is not a valid terminal key (terminals send it as plain `enter`/`ctrl+m`). Button labels include the shortcut hint, e.g. `"Submit (ctrl+s)"`.
 
 **State machines:**
 - WorkItem: `todo` → `working` → `input`/`review` → `done`
