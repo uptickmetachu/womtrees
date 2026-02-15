@@ -27,12 +27,18 @@ from womtrees.tui.dialogs import (
     CreateDialog,
     DeleteDialog,
     EditDialog,
+    GitActionsDialog,
     HelpDialog,
     MergeDialog,
     RebaseDialog,
 )
 from womtrees.models import GitStats
-from womtrees.worktree import get_current_repo, get_diff_stats, has_uncommitted_changes
+from womtrees.worktree import (
+    get_current_repo,
+    get_diff_stats,
+    get_uncommitted_diff_stats,
+    has_uncommitted_changes,
+)
 
 
 class WomtreesApp(App):
@@ -70,11 +76,10 @@ class WomtreesApp(App):
         Binding("s", "start_item", "Start", show=True),
         Binding("c", "create_item", "Create", show=True),
         Binding("t", "todo_item", "Todo", show=True),
-        Binding("m", "merge_item", "Merge", show=True),
+        Binding("g", "git_actions", "Git", show=True),
         Binding("e", "edit_item", "Edit", show=True),
         Binding("d", "delete_item", "Delete", show=True),
         Binding("p", "create_pr", "PR", show=True),
-        Binding("g", "toggle_grouping", "Group", show=True),
     ]
 
     def __init__(self, **kwargs) -> None:
@@ -133,17 +138,22 @@ class WomtreesApp(App):
         finally:
             conn.close()
 
-        # Compute git stats for review items
+        # Compute git stats for active items
         git_stats: dict[int, GitStats] = {}
         for item in items:
-            if item.status == "review" and item.worktree_path:
+            if item.status in ("working", "input", "review") and item.worktree_path:
                 try:
                     insertions, deletions = get_diff_stats(item.repo_path, item.branch)
                     uncommitted = has_uncommitted_changes(item.worktree_path)
+                    uc_ins, uc_del = (0, 0)
+                    if uncommitted:
+                        uc_ins, uc_del = get_uncommitted_diff_stats(item.worktree_path)
                     git_stats[item.id] = GitStats(
                         uncommitted=uncommitted,
                         insertions=insertions,
                         deletions=deletions,
+                        uncommitted_insertions=uc_ins,
+                        uncommitted_deletions=uc_del,
                     )
                 except Exception:
                     pass
@@ -477,6 +487,167 @@ class WomtreesApp(App):
             self.notify(f"Updated #{item_id}")
             self._refresh_board()
 
+    def action_git_actions(self) -> None:
+        """Show git actions modal for the focused card."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+
+        from womtrees.worktree import needs_rebase
+
+        item = card.work_item
+        if item.status == "done":
+            self.notify("No git actions for DONE items", severity="warning")
+            return
+
+        # Gather info for the dialog
+        git_stats = None
+        rebase_needed = False
+        if item.worktree_path:
+            try:
+                insertions, deletions = get_diff_stats(item.repo_path, item.branch)
+                uncommitted = has_uncommitted_changes(item.worktree_path)
+                uc_ins, uc_del = (0, 0)
+                if uncommitted:
+                    uc_ins, uc_del = get_uncommitted_diff_stats(item.worktree_path)
+                git_stats = GitStats(
+                    uncommitted=uncommitted,
+                    insertions=insertions,
+                    deletions=deletions,
+                    uncommitted_insertions=uc_ins,
+                    uncommitted_deletions=uc_del,
+                )
+            except Exception:
+                pass
+            try:
+                rebase_needed = needs_rebase(item.repo_path, item.branch)
+            except Exception:
+                pass
+
+        # Get PRs for this item
+        conn = get_connection()
+        try:
+            prs = list_pull_requests(conn)
+        finally:
+            conn.close()
+        item_prs = [pr for pr in prs if pr.work_item_id == item.id]
+
+        self.push_screen(
+            GitActionsDialog(
+                branch=item.branch,
+                status=item.status,
+                git_stats=git_stats,
+                pull_requests=item_prs,
+                needs_rebase=rebase_needed,
+            ),
+            lambda action: self._on_git_action(action, item.id),
+        )
+
+    def _on_git_action(self, action: str | None, item_id: int) -> None:
+        """Dispatch the selected git action."""
+        if action is None:
+            return
+
+        conn = get_connection()
+        item = get_work_item(conn, item_id)
+        conn.close()
+        if item is None:
+            return
+
+        if action == "merge":
+            self._do_merge(item)
+        elif action == "commit":
+            self._do_commit(item)
+        elif action == "rebase":
+            self._do_rebase(item)
+        elif action == "push":
+            self._do_push(item)
+        elif action == "pull":
+            self._do_pull(item)
+
+    def _do_merge(self, item) -> None:
+        """Trigger merge flow for a work item."""
+        if item.status != "review":
+            self.notify("Can only merge REVIEW items", severity="warning")
+            return
+
+        from womtrees.worktree import get_default_branch
+
+        target = get_default_branch(item.repo_path)
+        msg = f"Merge #{item.id} ({item.branch}) into {target}?"
+        self.push_screen(
+            MergeDialog(msg),
+            lambda confirmed: self._on_merge_confirmed(confirmed, item.id),
+        )
+
+    def _do_commit(self, item) -> None:
+        """Open tmux session to commit interactively."""
+        if not item.worktree_path:
+            self.notify("No worktree path", severity="error")
+            return
+
+        prompt = (
+            "Review the current changes with `git diff` and `git status`, "
+            "then create an appropriate commit. Ask me for the commit message "
+            "if the intent is unclear."
+        )
+        self.push_screen(
+            ClaudeStreamDialog(
+                title=f"Committing #{item.id}",
+                prompt=prompt,
+                cwd=item.worktree_path,
+            ),
+            lambda _result: self._refresh_board(),
+        )
+
+    def _do_rebase(self, item) -> None:
+        """Trigger rebase flow for a work item."""
+        if item.status != "review":
+            self.notify("Can only rebase REVIEW items", severity="warning")
+            return
+        self._cmd_rebase_item(item)
+
+    def _do_push(self, item) -> None:
+        """Push the item's branch to remote."""
+        if item.status not in ("working", "input", "review"):
+            self.notify("Cannot push in this state", severity="warning")
+            return
+        if not item.worktree_path:
+            self.notify("No worktree path", severity="error")
+            return
+        try:
+            subprocess.run(
+                ["git", "push", "--set-upstream", "origin", item.branch],
+                cwd=item.worktree_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.notify(f"Pushed {item.branch}")
+        except subprocess.CalledProcessError as e:
+            self.notify(f"Push failed: {e.stderr.strip()}", severity="error")
+
+    def _do_pull(self, item) -> None:
+        """Pull latest changes for the item's branch."""
+        if item.status == "done":
+            self.notify("Cannot pull for DONE items", severity="warning")
+            return
+        if not item.worktree_path:
+            self.notify("No worktree path", severity="error")
+            return
+        try:
+            subprocess.run(
+                ["git", "pull"],
+                cwd=item.worktree_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.notify(f"Pulled {item.branch}")
+        except subprocess.CalledProcessError as e:
+            self.notify(f"Pull failed: {e.stderr.strip()}", severity="error")
+        self._refresh_board()
+
     def action_merge_item(self) -> None:
         """Merge a review item's branch into the default branch."""
         card = self._get_focused_card()
@@ -485,17 +656,7 @@ class WomtreesApp(App):
         if card.work_item.status != "review":
             self.notify("Can only merge REVIEW items", severity="warning")
             return
-
-        from womtrees.worktree import get_default_branch
-
-        item = card.work_item
-        target = get_default_branch(item.repo_path)
-        msg = f"Merge #{item.id} ({item.branch}) into {target}?"
-
-        self.push_screen(
-            MergeDialog(msg),
-            lambda confirmed: self._on_merge_confirmed(confirmed, item.id),
-        )
+        self._do_merge(card.work_item)
 
     def _on_merge_confirmed(self, confirmed: bool, item_id: int) -> None:
         if not confirmed:
@@ -758,7 +919,10 @@ class WomtreesApp(App):
         if item.status != "review":
             self.notify("Can only rebase REVIEW items", severity="warning")
             return
+        self._cmd_rebase_item(item)
 
+    def _cmd_rebase_item(self, item) -> None:
+        """Rebase a specific item's branch onto default branch."""
         from womtrees.worktree import get_default_branch
 
         target = get_default_branch(item.repo_path)

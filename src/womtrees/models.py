@@ -36,6 +36,8 @@ class GitStats:
     uncommitted: bool
     insertions: int
     deletions: int
+    uncommitted_insertions: int = 0
+    uncommitted_deletions: int = 0
 
 
 @dataclass
