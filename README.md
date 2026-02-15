@@ -6,6 +6,8 @@
 
 This is a personal workflow tool. It does one thing well: manage parallel workstreams across git worktrees with a terminal-native board. If that sounds like your vibe, welcome to the burrow.
 
+![womtrees kanban TUI](docs/screenshot.png)
+
 ## How it works
 
 ```
