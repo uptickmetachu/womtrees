@@ -188,10 +188,12 @@ def delete(item_id: int, force: bool) -> None:
                 return
 
         try:
-            delete_work_item(conn, item_id, force=force)
+            warning = delete_work_item(conn, item_id, force=force)
         except (WorkItemNotFoundError, InvalidStateError) as e:
             raise click.ClickException(str(e))
     click.echo(f"Deleted #{item_id}")
+    if warning:
+        click.echo(f"Warning: {warning}", err=True)
 
 
 @click.command()

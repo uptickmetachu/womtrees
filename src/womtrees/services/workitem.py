@@ -214,9 +214,10 @@ def delete_work_item(
     item_id: int,
     *,
     force: bool = False,
-) -> None:
+) -> str | None:
     """Delete a work item and clean up its worktree/tmux session.
 
+    Returns a warning string if teardown scripts failed, None otherwise.
     Raises WorkItemNotFoundError if the item doesn't exist.
     Raises InvalidStateError if the item is 'working' and force=False.
     """
@@ -233,19 +234,24 @@ def delete_work_item(
     if item.tmux_session and tmux.session_exists(item.tmux_session):
         tmux.kill_session(item.tmux_session)
 
+    warning: str | None = None
     if item.worktree_path:
         try:
-            remove_worktree(item.worktree_path)
+            warning = remove_worktree(item.worktree_path, branch=item.branch)
         except subprocess.CalledProcessError:
             pass  # Best effort
 
     db_delete_work_item(conn, item_id)
+    return warning
 
 
-def merge_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem:
+def merge_work_item(
+    conn: sqlite3.Connection, item_id: int
+) -> tuple[WorkItem, str | None]:
     """Merge a review item's branch and mark as done.
 
     Performs: merge branch, kill tmux, remove worktree, delete branch, mark done.
+    Returns (updated WorkItem, teardown warning or None).
     Raises WorkItemNotFoundError, InvalidStateError.
     Re-raises RebaseRequiredError, subprocess.CalledProcessError from worktree.
     """
@@ -264,9 +270,10 @@ def merge_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem:
         tmux.kill_session(item.tmux_session)
 
     # Clean up worktree
+    warning: str | None = None
     if item.worktree_path:
         try:
-            remove_worktree(item.worktree_path)
+            warning = remove_worktree(item.worktree_path, branch=item.branch)
         except subprocess.CalledProcessError:
             pass
 
@@ -282,7 +289,7 @@ def merge_work_item(conn: sqlite3.Connection, item_id: int) -> WorkItem:
         pass
 
     updated = update_work_item(conn, item_id, status="done")
-    return updated  # type: ignore[return-value]
+    return updated, warning  # type: ignore[return-value]
 
 
 def edit_work_item(

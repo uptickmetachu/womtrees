@@ -131,6 +131,9 @@ class WomtreesApp(App[None]):
 
     def _refresh_board(self) -> None:
         """Reload data from SQLite and refresh the board."""
+        # Save focused card identity before refresh
+        focused_key = self._get_focused_card_key()
+
         try:
             conn = get_connection()
         except Exception:
@@ -169,6 +172,39 @@ class WomtreesApp(App[None]):
         )
 
         self._update_status_bar(items, sessions)
+
+        # Restore focus to the same card
+        if focused_key is not None:
+            self._restore_focus(focused_key)
+
+    def _get_focused_card_key(self) -> tuple[str, int | str] | None:
+        """Return a key identifying the currently focused card."""
+        card = self._get_focused_card()
+        if isinstance(card, WorkItemCard):
+            return ("item", card.work_item.id)
+        elif isinstance(card, UnmanagedCard):
+            return ("unmanaged", card.branch)
+        return None
+
+    def _restore_focus(self, key: tuple[str, int | str]) -> None:
+        """Find and focus the card matching the saved key."""
+        board = self._get_board()
+        for col in board.columns.values():
+            for card in col.get_focusable_cards():
+                if (
+                    key[0] == "item"
+                    and isinstance(card, WorkItemCard)
+                    and card.work_item.id == key[1]
+                ):
+                    card.focus()
+                    return
+                if (
+                    key[0] == "unmanaged"
+                    and isinstance(card, UnmanagedCard)
+                    and card.branch == key[1]
+                ):
+                    card.focus()
+                    return
 
     def _update_status_bar(
         self, items: list[WorkItem], sessions: list[ClaudeSession]
@@ -654,8 +690,10 @@ class WomtreesApp(App[None]):
         conn = get_connection()
 
         try:
-            merge_work_item(conn, item_id)
+            _, warning = merge_work_item(conn, item_id)
             self.notify(f"#{item_id} merged and done")
+            if warning:
+                self.notify(warning, severity="warning")
         except RebaseRequiredError as e:
             msg = (
                 f"Cannot merge #{item_id} ({e.branch}).\n"
@@ -772,8 +810,10 @@ class WomtreesApp(App[None]):
 
         conn = get_connection()
         try:
-            delete_work_item(conn, item_id, force=True)
+            warning = delete_work_item(conn, item_id, force=True)
             self.notify(f"Deleted #{item_id}")
+            if warning:
+                self.notify(warning, severity="warning")
         except WorkItemNotFoundError as e:
             self.notify(str(e), severity="error")
         except Exception as e:

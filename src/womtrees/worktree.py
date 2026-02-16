@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
 import subprocess
+import tomllib
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+@dataclass
+class ScriptResult:
+    """Result of running setup or teardown scripts."""
+
+    success: bool
+    log_path: Path | None = None
 
 
 def sanitize_branch_name(branch: str) -> str:
@@ -42,20 +52,39 @@ def get_current_repo() -> tuple[str, str] | None:
         return None
 
 
-def load_womtrees_json(repo_path: str) -> dict[str, Any] | None:
-    """Load .womtrees.json from a repo root if it exists."""
-    json_path = Path(repo_path) / ".womtrees.json"
-    if not json_path.exists():
+def load_womtrees_config(repo_path: str) -> dict[str, Any] | None:
+    """Load .womtrees.toml from a repo root, with .womtrees.local.toml overrides.
+
+    Returns None if no config file exists. Local overrides replace base keys
+    at the section level (e.g. local [scripts] fully replaces base [scripts]).
+    """
+    base_path = Path(repo_path) / ".womtrees.toml"
+    local_path = Path(repo_path) / ".womtrees.local.toml"
+
+    if not base_path.exists() and not local_path.exists():
         return None
-    with open(json_path) as f:
-        result: dict[str, Any] = json.load(f)
-        return result
+
+    config: dict[str, Any] = {}
+
+    if base_path.exists():
+        with open(base_path, "rb") as f:
+            config = tomllib.load(f)
+
+    if local_path.exists():
+        with open(local_path, "rb") as f:
+            local = tomllib.load(f)
+        # Key-level override: local sections replace base sections entirely
+        for key, value in local.items():
+            config[key] = value
+
+    return config
 
 
 def create_worktree(repo_path: str, branch: str, base_dir: Path) -> Path:
-    """Create a git worktree and run setup from .womtrees.json if present.
+    """Create a git worktree and run setup from .womtrees.toml if present.
 
     Returns the worktree path.
+    Raises SetupScriptError if setup scripts fail (worktree is rolled back).
     """
     repo_name = Path(repo_path).name
     sanitized = sanitize_branch_name(branch)
@@ -79,20 +108,43 @@ def create_worktree(repo_path: str, branch: str, base_dir: Path) -> Path:
 
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-    # Run .womtrees.json setup
-    config = load_womtrees_json(repo_path)
+    # Run .womtrees.toml setup
+    config = load_womtrees_config(repo_path)
     if config:
-        _run_womtrees_setup(config, repo_path, worktree_path)
+        _run_womtrees_copy(config, repo_path, worktree_path)
+        setup_cmds = config.get("scripts", {}).get("setup", [])
+        if setup_cmds:
+            script_result = _run_scripts(
+                setup_cmds, worktree_path, repo_path, "setup", branch
+            )
+            if not script_result.success:
+                # Roll back: remove the worktree
+                try:
+                    _remove_worktree_git(worktree_path, repo_path)
+                except Exception:
+                    pass
+                raise SetupScriptError(script_result.log_path)
 
     return worktree_path
 
 
-def _run_womtrees_setup(
+class SetupScriptError(Exception):
+    """Raised when setup scripts fail during worktree creation."""
+
+    def __init__(self, log_path: Path | None) -> None:
+        self.log_path = log_path
+        msg = "Setup scripts failed."
+        if log_path:
+            msg += f" Log: {log_path}"
+        super().__init__(msg)
+
+
+def _run_womtrees_copy(
     config: dict[str, Any], repo_path: str, worktree_path: Path
 ) -> None:
-    """Copy files and run setup commands from .womtrees.json."""
-    # Copy files first
-    for file_path in config.get("copy", []):
+    """Copy files from source repo to worktree based on config."""
+    copy_files = config.get("copy", {}).get("files", [])
+    for file_path in copy_files:
         src = Path(repo_path) / file_path
         dst = worktree_path / file_path
         if src.exists():
@@ -102,20 +154,57 @@ def _run_womtrees_setup(
             else:
                 shutil.copy2(src, dst)
 
-    # Run setup commands
+
+def _run_scripts(
+    commands: list[str],
+    worktree_path: Path,
+    repo_path: str,
+    action: str,
+    branch: str,
+) -> ScriptResult:
+    """Run shell commands sequentially with logging.
+
+    Writes output to /tmp/womtrees-<action>-<branch>-<timestamp>.log.
+    On success, the log is deleted. On failure, the log is preserved.
+    """
+    sanitized = sanitize_branch_name(branch)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = Path(f"/tmp/womtrees-{action}-{sanitized}-{timestamp}.log")
+
     env = os.environ.copy()
     env["ROOT_WORKTREE_PATH"] = repo_path
 
-    for cmd in config.get("setup", []):
-        subprocess.run(
-            cmd,
-            shell=True,
-            cwd=worktree_path,
-            env=env,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+    with open(log_path, "w") as log:
+        log.write(f"[womtrees {action}] {datetime.now().isoformat()}\n")
+        log.write(f"worktree: {worktree_path}\n")
+        log.write(f"repo: {repo_path}\n\n")
+
+        for i, cmd in enumerate(commands):
+            log.write(f"$ {cmd}\n")
+            log.flush()
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=worktree_path,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if result.stdout:
+                log.write(result.stdout)
+            if result.stderr:
+                log.write(result.stderr)
+            log.write(f"exit: {result.returncode}\n\n")
+
+            if result.returncode != 0:
+                log.write(f"RESULT: FAILED at command {i + 1}\n")
+                return ScriptResult(success=False, log_path=log_path)
+
+        log.write("RESULT: SUCCESS\n")
+
+    # Auto-cleanup on success
+    log_path.unlink(missing_ok=True)
+    return ScriptResult(success=True)
 
 
 def get_default_branch(repo_path: str) -> str:
@@ -321,23 +410,59 @@ def rename_branch(worktree_path: str, old_branch: str, new_branch: str) -> None:
     )
 
 
+def _discover_repo_path(worktree_path: Path) -> Path | None:
+    """Discover the main repo path from a worktree's .git file."""
+    git_file = worktree_path / ".git"
+    if git_file.is_file():
+        content = git_file.read_text().strip()
+        if content.startswith("gitdir:"):
+            git_dir = Path(content.split(":", 1)[1].strip())
+            # Go up from .git/worktrees/<name> to the repo root
+            return git_dir.parent.parent.parent
+    return None
+
+
 def remove_worktree(
-    worktree_path: str | Path, repo_path: str | Path | None = None
-) -> None:
-    """Remove a git worktree and prune."""
+    worktree_path: str | Path,
+    repo_path: str | Path | None = None,
+    branch: str | None = None,
+) -> str | None:
+    """Remove a git worktree, running teardown scripts first.
+
+    Returns a warning message if teardown scripts failed, None otherwise.
+    The worktree is always removed regardless of teardown success.
+    """
     worktree_path = Path(worktree_path)
 
-    # Discover the main repo from the worktree's .git file if not provided
     if repo_path is None:
-        git_file = worktree_path / ".git"
-        if git_file.is_file():
-            # .git file in worktree contains: gitdir: /path/to/repo/.git/worktrees/<name>
-            content = git_file.read_text().strip()
-            if content.startswith("gitdir:"):
-                git_dir = Path(content.split(":", 1)[1].strip())
-                # Go up from .git/worktrees/<name> to the repo root
-                repo_path = git_dir.parent.parent.parent
+        discovered = _discover_repo_path(worktree_path)
+        if discovered:
+            repo_path = discovered
 
+    # Run teardown scripts before removal
+    warning: str | None = None
+    if repo_path:
+        config = load_womtrees_config(str(repo_path))
+        if config:
+            teardown_cmds = config.get("scripts", {}).get("teardown", [])
+            if teardown_cmds:
+                # Determine branch name from worktree dir if not provided
+                if branch is None:
+                    branch = worktree_path.name
+                result = _run_scripts(
+                    teardown_cmds, worktree_path, str(repo_path), "teardown", branch
+                )
+                if not result.success:
+                    warning = f"Teardown scripts failed. Log: {result.log_path}"
+
+    _remove_worktree_git(worktree_path, repo_path)
+    return warning
+
+
+def _remove_worktree_git(
+    worktree_path: Path, repo_path: str | Path | None = None
+) -> None:
+    """Low-level git worktree remove + prune."""
     cmd = ["git"]
     if repo_path:
         cmd += ["-C", str(repo_path)]
