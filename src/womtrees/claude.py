@@ -87,7 +87,9 @@ def _is_wt_hook_entry(entry: dict[str, object]) -> bool:
     hooks = entry.get("hooks", [])
     if isinstance(hooks, list):
         for handler in hooks:
-            if isinstance(handler, dict) and "wt hook" in str(handler.get("command", "")):
+            if isinstance(handler, dict) and "wt hook" in str(
+                handler.get("command", "")
+            ):
                 return True
     # Old format: {"command": "wt hook ..."}
     if "wt hook" in str(entry.get("command", "")):

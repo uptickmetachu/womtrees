@@ -222,6 +222,9 @@ class TestCheckRefresh:
                     db_file.write_text("v2")
 
                     app._check_refresh()
+                    # Debounce timer schedules refresh — wait for it to fire
+                    assert app._debounce_timer is not None
+                    await pilot.pause(app._DEBOUNCE_SECONDS + 0.1)
                     # Should have triggered a refresh (new get_connection call)
                     assert mock_conn.call_count > call_count_before
 

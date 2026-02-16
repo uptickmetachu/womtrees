@@ -48,6 +48,16 @@ uv run mypy src/         # Type check
 - `tui/app.py` — Textual `WomtreesApp` with kanban board, vim-style navigation, dialog callbacks
 - `tui/dialogs/` — Modal dialogs split into individual files: `create.py`, `edit.py`, `delete.py`, `merge.py`, `rebase.py`, `auto_rebase.py`, `claude_stream.py`, `help.py`. Re-exported from `tui/dialogs/__init__.py`.
 
+**TUI stable widget pattern (anti-flicker):** Cards and column widgets use update-in-place to avoid flicker from destroy/recreate cycles:
+- All cards have stable DOM IDs (`id=f"item-{work_item.id}"`, `id=f"unmanaged-{branch}"`). Never create throwaway cards without IDs.
+- Use `update_data()` + `_rebuild_children()` to update card content — replaces child `Static`s only, card widget stays in DOM so focus is preserved.
+- `KanbanColumn.card_map` (dict keyed by widget ID) and `_repo_header_map` track all mounted widgets. On refresh, diff against incoming data: remove gone widgets, call `update_data()` on existing ones, `mount()` only truly new ones.
+- **Never call `widget.remove()` then `self.mount(widget)` on the same widget** — Textual's `remove()` is async and invalidates the widget before the synchronous `mount()` runs, causing blank panels.
+- Repo headers are kept in DOM across refreshes (tracked in `_repo_header_map`). Only add/remove when the repo set changes.
+- `_first_update` flag gates the initial mount (everything in order) vs subsequent diffs (only new widgets mounted).
+- `_check_refresh()` uses a 1-second debounce timer so rapid heartbeats coalesce into a single `_refresh_board()` call.
+- Focus save/restore is unnecessary — cards stay in DOM so focus is preserved automatically.
+
 **TUI dialog key bindings:** `ctrl+s` is the universal submit/confirm shortcut across all dialogs. Use `Binding("ctrl+s", ..., priority=True)` — priority bindings fire before focused widgets consume the event. Note: `ctrl+enter` is not a valid terminal key (terminals send it as plain `enter`/`ctrl+m`). Button labels include the shortcut hint, e.g. `"Submit (ctrl+s)"`.
 
 **State machines:**

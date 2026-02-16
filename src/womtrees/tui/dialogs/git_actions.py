@@ -153,9 +153,10 @@ class GitActionsDialog(ModalScreen[str | None]):
                 classes="git-action",
             )
 
-            can_create_pr = (
-                not self._pull_requests
-                and self._status in ("working", "input", "review")
+            can_create_pr = not self._pull_requests and self._status in (
+                "working",
+                "input",
+                "review",
             )
             if can_create_pr:
                 yield Static(

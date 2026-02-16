@@ -87,7 +87,9 @@ def create_worktree(repo_path: str, branch: str, base_dir: Path) -> Path:
     return worktree_path
 
 
-def _run_womtrees_setup(config: dict[str, Any], repo_path: str, worktree_path: Path) -> None:
+def _run_womtrees_setup(
+    config: dict[str, Any], repo_path: str, worktree_path: Path
+) -> None:
     """Copy files and run setup commands from .womtrees.json."""
     # Copy files first
     for file_path in config.get("copy", []):

@@ -426,9 +426,7 @@ def upsert_repo(conn: sqlite3.Connection, repo_name: str, repo_path: str) -> Non
 
 def list_repos(conn: sqlite3.Connection) -> list[tuple[str, str]]:
     """Return distinct (repo_name, repo_path) pairs from the repos table."""
-    cursor = conn.execute(
-        "SELECT repo_name, repo_path FROM repos ORDER BY repo_name"
-    )
+    cursor = conn.execute("SELECT repo_name, repo_path FROM repos ORDER BY repo_name")
     return [(row["repo_name"], row["repo_path"]) for row in cursor.fetchall()]
 
 
