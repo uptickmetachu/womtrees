@@ -102,6 +102,7 @@ class WorkItemCard(Widget, can_focus=True):
         git_stats: GitStats | None = None,
         **kwargs: Any,
     ) -> None:
+        kwargs.setdefault("id", f"item-{work_item.id}")
         super().__init__(**kwargs)
         self.work_item = work_item
         self.sessions = sessions or []
@@ -109,24 +110,50 @@ class WorkItemCard(Widget, can_focus=True):
         self.git_stats = git_stats
 
     def compose(self) -> ComposeResult:
-        yield Static(self._render_title(), classes="card-title")
+        yield from self._build_children()
+
+    def _build_children(self) -> list[Static]:
+        children: list[Static] = []
+        children.append(Static(self._render_title(), classes="card-title"))
         if self.git_stats:
-            yield Static(self._render_git_stats(), classes="git-stats")
+            children.append(Static(self._render_git_stats(), classes="git-stats"))
         if self.work_item.prompt:
             prompt = self.work_item.prompt[:40]
             if len(self.work_item.prompt) > 40:
                 prompt += "..."
-            yield Static(prompt, classes="card-prompt")
+            children.append(Static(prompt, classes="card-prompt"))
         for session in self.sessions:
             age = _time_ago(session.updated_at)
             cls = f"session-{session.state}"
             indicator = " *" if session.state == "waiting" else ""
-            yield Static(
-                f"C{session.id}: {session.state}{indicator} {age}", classes=cls
+            children.append(
+                Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
             )
         for pr in self.pull_requests:
             cls = f"pr-{pr.status}"
-            yield Static(f"PR #{pr.number} {pr.status}", classes=cls)
+            children.append(Static(f"PR #{pr.number} {pr.status}", classes=cls))
+        return children
+
+    def update_data(
+        self,
+        work_item: WorkItem,
+        sessions: list[ClaudeSession] | None = None,
+        pull_requests: list[PullRequest] | None = None,
+        git_stats: GitStats | None = None,
+    ) -> None:
+        """Update card data and rebuild children in-place (no flicker)."""
+        self.work_item = work_item
+        self.sessions = sessions or []
+        self.pull_requests = pull_requests or []
+        self.git_stats = git_stats
+        self._rebuild_children()
+
+    def _rebuild_children(self) -> None:
+        """Remove existing child widgets and mount fresh ones."""
+        for child in list(self.children):
+            child.remove()
+        for widget in self._build_children():
+            self.mount(widget)
 
     def _render_title(self) -> str:
         if self.work_item.name:
@@ -192,16 +219,37 @@ class UnmanagedCard(Widget, can_focus=True):
         sessions: list[ClaudeSession],
         **kwargs: Any,
     ) -> None:
+        kwargs.setdefault("id", f"unmanaged-{branch}")
         super().__init__(**kwargs)
         self.branch = branch
         self.sessions = sessions
 
     def compose(self) -> ComposeResult:
-        yield Static(f"{self.branch} (unmanaged)", classes="card-title")
+        yield from self._build_children()
+
+    def _build_children(self) -> list[Static]:
+        children: list[Static] = []
+        children.append(Static(f"{self.branch} (unmanaged)", classes="card-title"))
         for session in self.sessions:
             age = _time_ago(session.updated_at)
             cls = f"session-{session.state}"
             indicator = " *" if session.state == "waiting" else ""
-            yield Static(
-                f"C{session.id}: {session.state}{indicator} {age}", classes=cls
+            children.append(
+                Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
             )
+        return children
+
+    def update_data(
+        self,
+        sessions: list[ClaudeSession],
+    ) -> None:
+        """Update card data and rebuild children in-place (no flicker)."""
+        self.sessions = sessions
+        self._rebuild_children()
+
+    def _rebuild_children(self) -> None:
+        """Remove existing child widgets and mount fresh ones."""
+        for child in list(self.children):
+            child.remove()
+        for widget in self._build_children():
+            self.mount(widget)

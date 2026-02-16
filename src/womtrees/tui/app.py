@@ -7,6 +7,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.events import DescendantFocus
+from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 from womtrees.config import get_config
 from womtrees.db import (
@@ -82,12 +83,15 @@ class WomtreesApp(App[None]):
         Binding("d", "delete_item", "Delete", show=True),
     ]
 
+    _DEBOUNCE_SECONDS = 1.0
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.group_by_repo = True
         self.active_column_idx = 0
         self.repo_context = get_current_repo()
         self.last_focused_card: WorkItemCard | UnmanagedCard | None = None
+        self._debounce_timer: Timer | None = None
 
     def on_descendant_focus(self, event: DescendantFocus) -> None:
         """Track the last focused card for the command palette."""
@@ -110,7 +114,7 @@ class WomtreesApp(App[None]):
         self.set_interval(10, self._refresh_board)
 
     def _check_refresh(self) -> None:
-        """Check DB/WAL file mtime; refresh only if changed."""
+        """Check DB/WAL file mtime; debounce rapid changes into one refresh."""
         mtime: float = 0
         for path in (self._db_path, self._wal_path):
             try:
@@ -119,13 +123,14 @@ class WomtreesApp(App[None]):
                 continue
         if mtime and mtime != self._last_db_mtime:
             self._last_db_mtime = mtime
-            self._refresh_board()
+            if self._debounce_timer is not None:
+                self._debounce_timer.stop()
+            self._debounce_timer = self.set_timer(
+                self._DEBOUNCE_SECONDS, self._refresh_board
+            )
 
     def _refresh_board(self) -> None:
         """Reload data from SQLite and refresh the board."""
-        # Save focused card identity before refresh
-        focused_key = self._get_focused_card_key()
-
         try:
             conn = get_connection()
         except Exception:
@@ -165,40 +170,9 @@ class WomtreesApp(App[None]):
 
         self._update_status_bar(items, sessions)
 
-        # Restore focus to the same card
-        if focused_key is not None:
-            self._restore_focus(focused_key)
-
-    def _get_focused_card_key(self) -> tuple[str, int | str] | None:
-        """Return a key identifying the currently focused card."""
-        card = self._get_focused_card()
-        if isinstance(card, WorkItemCard):
-            return ("item", card.work_item.id)
-        elif isinstance(card, UnmanagedCard):
-            return ("unmanaged", card.branch)
-        return None
-
-    def _restore_focus(self, key: tuple[str, int | str]) -> None:
-        """Find and focus the card matching the saved key."""
-        board = self._get_board()
-        for col in board.columns.values():
-            for card in col.get_focusable_cards():
-                if (
-                    key[0] == "item"
-                    and isinstance(card, WorkItemCard)
-                    and card.work_item.id == key[1]
-                ):
-                    card.focus()
-                    return
-                if (
-                    key[0] == "unmanaged"
-                    and isinstance(card, UnmanagedCard)
-                    and card.branch == key[1]
-                ):
-                    card.focus()
-                    return
-
-    def _update_status_bar(self, items: list[WorkItem], sessions: list[ClaudeSession]) -> None:
+    def _update_status_bar(
+        self, items: list[WorkItem], sessions: list[ClaudeSession]
+    ) -> None:
         counts = {"todo": 0, "working": 0, "input": 0, "review": 0, "done": 0}
         for item in items:
             counts[item.status] = counts.get(item.status, 0) + 1
@@ -448,7 +422,9 @@ class WomtreesApp(App[None]):
             lambda result: self._on_edit_dialog(result, item.id),
         )
 
-    def _on_edit_dialog(self, result: dict[str, str | None] | None, item_id: int) -> None:
+    def _on_edit_dialog(
+        self, result: dict[str, str | None] | None, item_id: int
+    ) -> None:
         if result is None:
             return
 
