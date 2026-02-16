@@ -199,7 +199,9 @@ def delete(item_id: int, force: bool) -> None:
 @click.option("-n", "--name", default=None, help="New name for the work item.")
 @click.option("-b", "--branch", default=None, help="New branch name.")
 @click.option("-p", "--prompt", default=None, help="New prompt (todo items only).")
-def edit(item_id: int, name: str | None, branch: str | None, prompt: str | None) -> None:
+def edit(
+    item_id: int, name: str | None, branch: str | None, prompt: str | None
+) -> None:
     """Edit a work item's name, branch, or prompt."""
     if name is None and branch is None and prompt is None:
         raise click.ClickException("Provide --name, --branch, and/or --prompt.")
