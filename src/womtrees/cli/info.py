@@ -19,10 +19,13 @@ from womtrees.models import ClaudeSession, WorkItem
 
 
 @click.command("list")
-def list_cmd() -> None:
+@click.option("--all", "-a", "show_all", is_flag=True, help="Include done items.")
+def list_cmd(show_all: bool) -> None:
     """List work items with Claude session info."""
     with connection() as conn:
         items = list_work_items(conn)
+        if not show_all:
+            items = [i for i in items if i.status != "done"]
         if not items:
             click.echo("No work items found.")
             return
