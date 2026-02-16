@@ -14,6 +14,7 @@ from womtrees.cli.info import (
     _maybe_resume_claude,
     _restore_tmux_session,
     attach,
+    cd_cmd,
     cycle,
     list_cmd,
     sessions_cmd,
@@ -49,6 +50,7 @@ cli.add_command(list_cmd)
 cli.add_command(status)
 cli.add_command(sessions_cmd)
 cli.add_command(attach)
+cli.add_command(cd_cmd)
 cli.add_command(cycle)
 
 # Register hook group

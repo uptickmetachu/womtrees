@@ -905,3 +905,45 @@ def test_create_with_repo_option(runner, db_conn, tmp_path):
         item = get_work_item(conn, 1)
         assert item.repo_name == "another-project"
         assert item.repo_path == str(target_repo)
+
+
+def test_cd_tree_default(runner, tmp_path):
+    """cd with no flags prints worktree toplevel."""
+    mock_result = MagicMock()
+    mock_result.stdout = f"{tmp_path}/my-worktree\n"
+    mock_result.returncode = 0
+
+    with patch("subprocess.run", return_value=mock_result):
+        result = runner.invoke(cli, ["cd"], catch_exceptions=False)
+        assert result.exit_code == 0
+        assert result.output.strip() == f"{tmp_path}/my-worktree"
+
+
+def test_cd_root(runner, tmp_path):
+    """cd --root prints the main repository root."""
+    with patch(
+        "womtrees.worktree.get_current_repo",
+        return_value=("myrepo", str(tmp_path / "myrepo")),
+    ):
+        result = runner.invoke(cli, ["cd", "--root"], catch_exceptions=False)
+        assert result.exit_code == 0
+        assert result.output.strip() == str(tmp_path / "myrepo")
+
+
+def test_cd_root_not_in_repo(runner):
+    """cd --root outside a git repo fails."""
+    with patch("womtrees.worktree.get_current_repo", return_value=None):
+        result = runner.invoke(cli, ["cd", "--root"])
+        assert result.exit_code != 0
+        assert "Not inside a git repository" in result.output
+
+
+def test_cd_tree_not_in_repo(runner):
+    """cd --tree outside a git repo fails."""
+    with patch(
+        "subprocess.run",
+        side_effect=subprocess.CalledProcessError(128, "git"),
+    ):
+        result = runner.invoke(cli, ["cd", "--tree"])
+        assert result.exit_code != 0
+        assert "Not inside a git repository" in result.output

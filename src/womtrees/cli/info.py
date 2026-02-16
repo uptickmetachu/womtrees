@@ -287,6 +287,44 @@ def cycle(filter: str) -> None:
     tmux.attach(next_session)
 
 
+@click.command("cd")
+@click.option("--root", "mode", flag_value="root", help="Print the main repository root.")
+@click.option(
+    "--tree",
+    "mode",
+    flag_value="tree",
+    default=True,
+    help="Print the worktree root (default).",
+)
+def cd_cmd(mode: str) -> None:
+    """Print the root directory of the current worktree or repository.
+
+    Use with: cd $(wt cd)
+    """
+    import subprocess as _sp
+
+    if mode == "root":
+        from womtrees.worktree import get_current_repo
+
+        result = get_current_repo()
+        if result is None:
+            raise click.ClickException("Not inside a git repository.")
+        _name, repo_path = result
+        click.echo(repo_path)
+    else:
+        # --tree (default): worktree top-level
+        try:
+            result = _sp.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            click.echo(result.stdout.strip())
+        except _sp.CalledProcessError:
+            raise click.ClickException("Not inside a git repository.")
+
+
 @click.command()
 @click.argument("item_id", type=int)
 @click.option(
