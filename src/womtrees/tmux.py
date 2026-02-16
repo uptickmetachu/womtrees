@@ -117,6 +117,27 @@ def set_environment(session: str, key: str, value: str) -> None:
     _run(["tmux", "set-environment", "-t", session, key, value])
 
 
+def display_message(
+    session: str, message: str, duration_ms: int = 1000
+) -> None:
+    """Schedule a non-blocking message on a tmux session.
+
+    Uses `run-shell -b` to display the message after attach completes.
+    Shows in the status area without stealing input.
+    """
+    # Escape single quotes in message for shell embedding
+    safe_message = message.replace("'", "'\\''")
+    msg_cmd = (
+        f"sleep 0.1"
+        f" && tmux set-option -t {session} display-time {duration_ms}"
+        f" && tmux display-message -t {session} '{safe_message}'"
+    )
+    _run(
+        ["tmux", "run-shell", "-b", "-t", session, msg_cmd],
+        check=False,
+    )
+
+
 def attach(name: str) -> None:
     """Attach or switch to a tmux session."""
     if os.environ.get("TMUX"):
