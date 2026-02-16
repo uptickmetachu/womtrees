@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -67,7 +69,7 @@ class GitActionsDialog(ModalScreen[str | None]):
         git_stats: GitStats | None = None,
         pull_requests: list[PullRequest] | None = None,
         needs_rebase: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._branch = branch

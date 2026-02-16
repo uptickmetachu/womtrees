@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
@@ -7,7 +9,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, TextArea
 
 
-class EditDialog(ModalScreen[dict | None]):
+class EditDialog(ModalScreen[dict[str, str | None] | None]):
     """Modal dialog for editing a WorkItem's name, branch, and prompt."""
 
     BINDINGS = [
@@ -57,7 +59,7 @@ class EditDialog(ModalScreen[dict | None]):
         item_branch: str,
         item_prompt: str | None = None,
         show_prompt: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.item_name = item_name or ""

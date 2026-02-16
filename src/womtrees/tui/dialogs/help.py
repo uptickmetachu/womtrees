@@ -6,7 +6,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Label
 
 
-class HelpDialog(ModalScreen):
+class HelpDialog(ModalScreen[None]):
     """Help overlay showing keybindings."""
 
     BINDINGS = [("escape", "dismiss", "Close"), ("question_mark", "dismiss", "Close")]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
@@ -46,7 +48,7 @@ class KanbanColumn(VerticalScroll):
     }
     """
 
-    def __init__(self, status: str, **kwargs) -> None:
+    def __init__(self, status: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.status = status
         self.cards: list[WorkItemCard | UnmanagedCard | Static] = []

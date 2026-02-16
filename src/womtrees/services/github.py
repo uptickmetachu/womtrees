@@ -24,7 +24,7 @@ class GitHubUnavailableError(Exception):
         )
 
 
-def _detect_pr(repo_path: str, branch: str) -> dict | None:
+def _detect_pr(repo_path: str, branch: str) -> dict[str, str | int] | None:
     """Detect an open PR for the given branch using `gh pr list`.
 
     Returns a dict with keys: number, state, url, owner, repo — or None.

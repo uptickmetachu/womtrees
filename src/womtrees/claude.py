@@ -82,13 +82,15 @@ WOMTREE_HOOKS = {
 }
 
 
-def _is_wt_hook_entry(entry: dict) -> bool:
+def _is_wt_hook_entry(entry: dict[str, object]) -> bool:
     """Check if a hook entry contains a wt hook command."""
-    for handler in entry.get("hooks", []):
-        if "wt hook" in handler.get("command", ""):
-            return True
+    hooks = entry.get("hooks", [])
+    if isinstance(hooks, list):
+        for handler in hooks:
+            if isinstance(handler, dict) and "wt hook" in str(handler.get("command", "")):
+                return True
     # Old format: {"command": "wt hook ..."}
-    if "wt hook" in entry.get("command", ""):
+    if "wt hook" in str(entry.get("command", "")):
         return True
     return False
 

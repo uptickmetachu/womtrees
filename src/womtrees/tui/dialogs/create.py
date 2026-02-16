@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Vertical
@@ -7,7 +9,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, TextArea
 
 
-class CreateDialog(ModalScreen[dict | None]):
+class CreateDialog(ModalScreen[dict[str, str | None] | None]):
     """Modal dialog for creating a new WorkItem."""
 
     BINDINGS = [
@@ -62,7 +64,7 @@ class CreateDialog(ModalScreen[dict | None]):
         mode: str = "create",
         repos: list[tuple[str, str]] | None = None,
         default_repo: tuple[str, str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self.mode = mode  # "create" or "todo"

@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 
 def sanitize_branch_name(branch: str) -> str:
@@ -41,13 +42,14 @@ def get_current_repo() -> tuple[str, str] | None:
         return None
 
 
-def load_womtrees_json(repo_path: str) -> dict | None:
+def load_womtrees_json(repo_path: str) -> dict[str, Any] | None:
     """Load .womtrees.json from a repo root if it exists."""
     json_path = Path(repo_path) / ".womtrees.json"
     if not json_path.exists():
         return None
     with open(json_path) as f:
-        return json.load(f)
+        result: dict[str, Any] = json.load(f)
+        return result
 
 
 def create_worktree(repo_path: str, branch: str, base_dir: Path) -> Path:
@@ -85,7 +87,7 @@ def create_worktree(repo_path: str, branch: str, base_dir: Path) -> Path:
     return worktree_path
 
 
-def _run_womtrees_setup(config: dict, repo_path: str, worktree_path: Path) -> None:
+def _run_womtrees_setup(config: dict[str, Any], repo_path: str, worktree_path: Path) -> None:
     """Copy files and run setup commands from .womtrees.json."""
     # Copy files first
     for file_path in config.get("copy", []):
