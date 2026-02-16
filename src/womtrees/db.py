@@ -9,7 +9,7 @@ from pathlib import Path
 from womtrees.config import get_config
 from womtrees.models import ClaudeSession, PullRequest, WorkItem
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pull_requests_work_item ON pull_requests(work_item_id);
+
+CREATE TABLE IF NOT EXISTS repos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_name TEXT NOT NULL,
+    repo_path TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+);
 """
 
 MIGRATIONS = {
@@ -102,6 +109,18 @@ MIGRATIONS = {
             updated_at TEXT NOT NULL
         )""",
         "CREATE INDEX IF NOT EXISTS idx_pull_requests_work_item ON pull_requests(work_item_id)",
+    ],
+    7: [
+        """CREATE TABLE IF NOT EXISTS repos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            repo_name TEXT NOT NULL,
+            repo_path TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL
+        )""",
+        # Seed from existing work_items
+        """INSERT OR IGNORE INTO repos (repo_name, repo_path, created_at)
+           SELECT DISTINCT repo_name, repo_path, MIN(created_at)
+           FROM work_items GROUP BY repo_path""",
     ],
 }
 
@@ -229,6 +248,7 @@ def create_work_item(
             f"Branch '{branch}' already has an active work item (#{existing['id']})"
         )
 
+    upsert_repo(conn, repo_name, repo_path)
     now = _now()
     cursor = conn.execute(
         """INSERT INTO work_items (repo_name, repo_path, branch, name, prompt, status, created_at, updated_at)
@@ -393,10 +413,21 @@ def delete_claude_session(conn: sqlite3.Connection, session_id: int) -> bool:
     return cursor.rowcount > 0
 
 
+def upsert_repo(conn: sqlite3.Connection, repo_name: str, repo_path: str) -> None:
+    """Record a repo so it appears in future dropdowns."""
+    conn.execute(
+        """INSERT INTO repos (repo_name, repo_path, created_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(repo_path) DO UPDATE SET repo_name = excluded.repo_name""",
+        (repo_name, repo_path, _now()),
+    )
+    conn.commit()
+
+
 def list_repos(conn: sqlite3.Connection) -> list[tuple[str, str]]:
-    """Return distinct (repo_name, repo_path) pairs from work_items."""
+    """Return distinct (repo_name, repo_path) pairs from the repos table."""
     cursor = conn.execute(
-        "SELECT DISTINCT repo_name, repo_path FROM work_items ORDER BY repo_name"
+        "SELECT repo_name, repo_path FROM repos ORDER BY repo_name"
     )
     return [(row["repo_name"], row["repo_path"]) for row in cursor.fetchall()]
 
