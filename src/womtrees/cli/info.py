@@ -184,6 +184,8 @@ def _restore_tmux_session(conn: sqlite3.Connection, item: WorkItem) -> str:
     session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
     session_name, _pane_id = tmux.create_session(session_name, working_dir)
     tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item.id))
+    tmux.set_environment(session_name, "WOMTREE_NAME", item.name or "")
+    tmux.set_environment(session_name, "WOMTREE_BRANCH", item.branch)
     update_work_item(conn, item.id, tmux_session=session_name)
     return session_name
 

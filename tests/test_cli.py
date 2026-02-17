@@ -239,10 +239,20 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path) -> None:
         assert "myrepo/feat-x" in result.output
 
         mock_create.assert_called_once()
-        mock_setenv.assert_called_once_with(
+        mock_setenv.assert_any_call(
             "myrepo/feat-x",
             "WOMTREE_WORK_ITEM_ID",
             "1",
+        )
+        mock_setenv.assert_any_call(
+            "myrepo/feat-x",
+            "WOMTREE_NAME",
+            "test-prompt",
+        )
+        mock_setenv.assert_any_call(
+            "myrepo/feat-x",
+            "WOMTREE_BRANCH",
+            "feat/x",
         )
         mock_split.assert_called_once()
         mock_swap.assert_called_once()  # claude_pane=left triggers swap
@@ -431,7 +441,7 @@ def test_attach_restores_missing_session(runner, db_conn) -> None:
         assert result.exit_code == 0
         assert "Restored tmux session" in result.output
         mock_create.assert_called_once()
-        mock_setenv.assert_called_once()
+        assert mock_setenv.call_count == 3
         mock_attach.assert_called_once()
 
 

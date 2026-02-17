@@ -144,8 +144,10 @@ def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> W
         session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
         session_name, shell_pane_id = tmux.create_session(session_name, str(wt_path))
 
-        # Set environment variable for Claude hook detection
+        # Set environment variables for Claude hook detection and user scripts
         tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
+        tmux.set_environment(session_name, "WOMTREE_NAME", item.name or "")
+        tmux.set_environment(session_name, "WOMTREE_BRANCH", item.branch)
 
         # Split pane: creates a second pane for Claude
         claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
@@ -364,6 +366,7 @@ def edit_work_item(
                     item.tmux_session,
                     new_session_name,
                 )
+                tmux.set_environment(new_session_name, "WOMTREE_BRANCH", branch)
             updates["tmux_session"] = new_session_name
 
             # Update claude_sessions so hook lookups still work
@@ -378,6 +381,13 @@ def edit_work_item(
         updates["branch"] = branch
 
     if name is not None and name != item.name:
+        # Update tmux environment if session exists
+        if item.tmux_session:
+            from womtrees import tmux
+
+            session = updates.get("tmux_session", item.tmux_session)
+            if session and tmux.session_exists(session):
+                tmux.set_environment(session, "WOMTREE_NAME", name)
         updates["name"] = name
 
     if prompt is not _SENTINEL and prompt != item.prompt:
