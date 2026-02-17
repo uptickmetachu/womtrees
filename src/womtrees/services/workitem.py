@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 import subprocess
 
-from womtrees.config import Config
+from womtrees.config import Config, LayoutConfig
 from womtrees.db import (
     create_claude_session,
     get_work_item,
@@ -23,6 +23,7 @@ from womtrees.db import (
 from womtrees.models import WorkItem
 from womtrees.worktree import (
     create_worktree,
+    load_womtrees_config,
     remove_worktree,
     rename_branch,
     sanitize_branch_name,
@@ -117,6 +118,29 @@ def create_work_item_todo(
     )
 
 
+def resolve_layout(repo_path: str, config: Config) -> LayoutConfig:
+    """Resolve layout: .womtrees.toml → config default → 'standard'.
+
+    Raises ValueError if the resolved layout name is not found in config.
+    """
+    project_config = load_womtrees_config(repo_path)
+    layout_name = (project_config or {}).get("layout", config.default_layout)
+    if layout_name not in config.layouts:
+        raise ValueError(f"Layout '{layout_name}' not found in config.")
+    return config.layouts[layout_name]
+
+
+def _build_claude_cmd(config: Config, item: WorkItem) -> str:
+    """Build the claude CLI command string for a work item."""
+    claude_cmd = "claude"
+    if config.claude_args:
+        claude_cmd += f" {config.claude_args}"
+    if item.prompt:
+        escaped_prompt = item.prompt.replace("'", "'\\''")
+        claude_cmd += f" '{escaped_prompt}'"
+    return claude_cmd
+
+
 def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> WorkItem:
     """Start a TODO work item: create worktree + tmux session + Claude.
 
@@ -133,6 +157,9 @@ def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> W
     if not tmux.is_available():
         raise RuntimeError("tmux is required. Install it with: brew install tmux")
 
+    # Resolve layout
+    layout = resolve_layout(item.repo_path, config)
+
     # Create worktree
     wt_path = create_worktree(item.repo_path, item.branch, config.base_dir)
 
@@ -140,32 +167,48 @@ def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> W
     update_work_item(conn, item_id, worktree_path=str(wt_path))
 
     try:
-        # Create tmux session with env vars available in all panes
+        # Create tmux session (first window + first pane come for free)
         session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
         session_env = {
             "WOMTREE_WORK_ITEM_ID": str(item_id),
             "WOMTREE_NAME": item.name or "",
             "WOMTREE_BRANCH": item.branch,
         }
-        session_name, shell_pane_id = tmux.create_session(
+        session_name, first_pane_id = tmux.create_session(
             session_name, str(wt_path), env=session_env
         )
 
-        # Split pane: creates a second pane for Claude
-        claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
+        claude_pane_id: str | None = None
 
-        # If Claude pane should be on the left/top, swap so it comes first visually
-        if config.tmux_claude_pane in ("left", "top"):
-            tmux.swap_pane(session_name)
+        for win_idx, window in enumerate(layout.windows):
+            if win_idx == 0:
+                # First window already exists; rename it
+                tmux.rename_window(f"{session_name}:0", window.name)
+                current_pane_id = first_pane_id
+            else:
+                current_pane_id = tmux.new_window(
+                    session_name, window.name, str(wt_path)
+                )
 
-        # Launch Claude using the pane ID (immune to base-index settings)
-        claude_cmd = "claude"
-        if config.claude_args:
-            claude_cmd += f" {config.claude_args}"
-        if item.prompt:
-            escaped_prompt = item.prompt.replace("'", "'\\''")
-            claude_cmd += f" '{escaped_prompt}'"
-        tmux.send_keys(claude_pane_id, claude_cmd)
+            # Create additional panes (first pane already exists)
+            pane_ids = [current_pane_id]
+            for _ in window.panes[1:]:
+                pane_id = tmux.split_pane(session_name, "vertical", str(wt_path))
+                pane_ids.append(pane_id)
+
+            # Apply layout after all panes in window are created
+            window_target = f"{session_name}:{window.name}"
+            tmux.select_layout(window_target, window.layout)
+
+            # Send commands to each pane
+            for pane_cfg, pane_id in zip(window.panes, pane_ids):
+                if pane_cfg.claude:
+                    claude_pane_id = pane_id
+                    tmux.send_keys(pane_id, _build_claude_cmd(config, item))
+                elif pane_cfg.command:
+                    tmux.send_keys(pane_id, pane_cfg.command)
+
+        assert claude_pane_id is not None  # guaranteed by layout validation
 
         # Create a ClaudeSession record
         create_claude_session(

@@ -46,11 +46,11 @@ uv run mypy src/         # Type check
 - `db.py` — All DB access; plain SQL, WAL mode, migration system (`SCHEMA_VERSION`), returns dataclasses. Use `connection()` context manager (or `get_connection()` for long-lived connections).
 - `models.py` — `WorkItem`, `ClaudeSession`, `PullRequest`, `GitStats` dataclasses
 - `worktree.py` — Git worktree create/remove/merge/list; repo detection
-- `tmux.py` — Tmux session/pane management; send-keys, attach, split
+- `tmux.py` — Tmux session/pane management; send-keys, attach, split, new-window, select-layout
 - `claude.py` — Context detection (reads `$TMUX_PANE`, resolves work item from tmux env)
 - `diff.py` — Diff engine: `difflib` unified diffs + Pygments syntax highlighting. Pure data layer (`DiffLine`, `DiffFile`, `DiffResult`, `ReviewComment` dataclasses). No Textual imports.
 - `review.py` — Review submission: formats `ReviewComment` list as markdown, copies to clipboard (`pbcopy`/`xclip`), optionally sends to Claude via tmux
-- `config.py` — TOML config loading with typed `Config` dataclass
+- `config.py` — TOML config loading with typed `Config` dataclass. Includes layout config: `PaneConfig`, `WindowConfig`, `LayoutConfig` dataclasses. Parses `[layouts.*]` sections from TOML. Backward-compat: synthesizes `"standard"` layout from legacy `tmux.split`/`tmux.claude_pane` if no `[layouts]` defined.
 - `tui/app.py` — Textual `WomtreesApp` with kanban board, vim-style navigation, dialog callbacks
 - `tui/diff_app.py` — Standalone Textual app for the diff viewer (two-panel: file tree + diff view). Manages comments, submission to clipboard/Claude.
 - `tui/diff_view.py` — Custom `ScrollView` widget with virtual scrolling (`render_line()`) for rendering diffs with vim navigation, visual selection, and comment markers.
@@ -77,6 +77,8 @@ uv run mypy src/         # Type check
 - WorkItem: `todo` → `working` → `input`/`review` → `done`
 - ClaudeSession: `working` → `waiting` → `done`
 - Hook commands (`wt hook heartbeat|input|stop|mark-done`) drive state transitions
+
+**Custom layouts:** Named layout presets in `config.toml` (`[layouts.*]`). Each layout has windows, each window has panes with optional `claude=true` or `command`. Resolution order: `.womtrees.toml` `layout` field → `tmux.default_layout` → `"standard"`. `resolve_layout()` in `services/workitem.py` handles resolution. `start_work_item()` loops over layout windows/panes to create tmux structure. Design doc: `docs/plans/2026-02-18-custom-layouts-design.md`.
 
 **DB schema:** Three tables — `work_items` (repo, branch, worktree path, tmux session, status), `claude_sessions` (FK to work_item, pane, pid, state, prompt), `pull_requests` (FK to work_item, number, status, url). Migrations in `db.py` `MIGRATIONS` dict.
 
