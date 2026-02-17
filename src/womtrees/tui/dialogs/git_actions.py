@@ -88,7 +88,7 @@ class GitActionsDialog(ModalScreen[str | None]):
                 if self._git_stats.insertions or self._git_stats.deletions:
                     info_parts.append(
                         f"[green]+{self._git_stats.insertions}[/] "
-                        f"[red]-{self._git_stats.deletions}[/]"
+                        f"[red]-{self._git_stats.deletions}[/]",
                     )
                 if self._git_stats.uncommitted:
                     uc_text = "[yellow]uncommitted"
@@ -113,7 +113,8 @@ class GitActionsDialog(ModalScreen[str | None]):
                 if pr.url:
                     pr_text += f" ({pr.url})"
                 color = {"open": "green", "closed": "red", "merged": "magenta"}.get(
-                    pr.status, ""
+                    pr.status,
+                    "",
                 )
                 if color:
                     pr_text = f"[{color}]{pr_text}[/]"

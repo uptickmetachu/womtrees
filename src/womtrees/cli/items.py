@@ -2,6 +2,12 @@ from __future__ import annotations
 
 import click
 
+from womtrees.cli.utils import (
+    _generate_name,
+    _read_prompt,
+    _resolve_repo,
+    _slugify,
+)
 from womtrees.config import get_config
 from womtrees.db import (
     connection,
@@ -20,19 +26,15 @@ from womtrees.services.workitem import (
     start_work_item,
 )
 
-from womtrees.cli.utils import (
-    _generate_name,
-    _read_prompt,
-    _resolve_repo,
-    _slugify,
-)
-
 
 @click.command()
 @click.argument("prompt", required=False, default=None)
 @click.option("-b", "--branch", default=None, help="Branch name for the worktree.")
 @click.option(
-    "-n", "--name", default=None, help="Human-readable name for the work item."
+    "-n",
+    "--name",
+    default=None,
+    help="Human-readable name for the work item.",
 )
 @click.option(
     "-r",
@@ -42,7 +44,10 @@ from womtrees.cli.utils import (
     help="Target repo path (default: current git repo).",
 )
 def todo(
-    prompt: str | None, branch: str | None, name: str | None, repo_path: str | None
+    prompt: str | None,
+    branch: str | None,
+    name: str | None,
+    repo_path: str | None,
 ) -> None:
     """Create a TODO work item (queued for later).
 
@@ -52,7 +57,7 @@ def todo(
     prompt = _read_prompt(prompt)
     if not prompt and not branch:
         raise click.ClickException(
-            "Provide a prompt (positional arg or stdin) or --branch."
+            "Provide a prompt (positional arg or stdin) or --branch.",
         )
 
     config = get_config()
@@ -67,7 +72,12 @@ def todo(
     with connection() as conn:
         try:
             item = create_work_item_todo(
-                conn, repo_name, resolved_path, branch, prompt, name=name
+                conn,
+                repo_name,
+                resolved_path,
+                branch,
+                prompt,
+                name=name,
             )
         except ValueError as e:
             raise click.ClickException(str(e))
@@ -78,7 +88,10 @@ def todo(
 @click.argument("prompt", required=False, default=None)
 @click.option("-b", "--branch", default=None, help="Branch name for the worktree.")
 @click.option(
-    "-n", "--name", default=None, help="Human-readable name for the work item."
+    "-n",
+    "--name",
+    default=None,
+    help="Human-readable name for the work item.",
 )
 @click.option(
     "-r",
@@ -88,7 +101,10 @@ def todo(
     help="Target repo path (default: current git repo).",
 )
 def create(
-    prompt: str | None, branch: str | None, name: str | None, repo_path: str | None
+    prompt: str | None,
+    branch: str | None,
+    name: str | None,
+    repo_path: str | None,
 ) -> None:
     """Create a work item and immediately launch it.
 
@@ -98,7 +114,7 @@ def create(
     prompt = _read_prompt(prompt)
     if not prompt and not branch:
         raise click.ClickException(
-            "Provide a prompt (positional arg or stdin) or --branch."
+            "Provide a prompt (positional arg or stdin) or --branch.",
         )
 
     config = get_config()
@@ -113,7 +129,12 @@ def create(
     with connection() as conn:
         try:
             item = create_work_item_todo(
-                conn, repo_name, resolved_path, branch, prompt, name=name
+                conn,
+                repo_name,
+                resolved_path,
+                branch,
+                prompt,
+                name=name,
             )
         except ValueError as e:
             raise click.ClickException(str(e))
@@ -177,12 +198,12 @@ def delete(item_id: int, force: bool) -> None:
 
         if item.status == "working" and not force:
             raise click.ClickException(
-                f"WorkItem #{item_id} is still working. Use --force to delete."
+                f"WorkItem #{item_id} is still working. Use --force to delete.",
             )
 
         if item.status in ("working", "done", "review"):
             if not click.confirm(
-                f"Delete #{item_id} ({item.branch}, status={item.status})?"
+                f"Delete #{item_id} ({item.branch}, status={item.status})?",
             ):
                 click.echo("Aborted.")
                 return
@@ -202,7 +223,10 @@ def delete(item_id: int, force: bool) -> None:
 @click.option("-b", "--branch", default=None, help="New branch name.")
 @click.option("-p", "--prompt", default=None, help="New prompt (todo items only).")
 def edit(
-    item_id: int, name: str | None, branch: str | None, prompt: str | None
+    item_id: int,
+    name: str | None,
+    branch: str | None,
+    prompt: str | None,
 ) -> None:
     """Edit a work item's name, branch, or prompt."""
     if name is None and branch is None and prompt is None:

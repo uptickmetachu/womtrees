@@ -33,7 +33,7 @@ from womtrees.cli.items import (
 
 @click.group()
 def cli() -> None:
-    """womtrees — git worktree manager with tmux and Claude Code integration."""
+    """Womtrees — git worktree manager with tmux and Claude Code integration."""
 
 
 # Register item commands
@@ -62,4 +62,4 @@ cli.add_command(sqlite_cmd)
 cli.add_command(config)
 
 # Re-export for backward compatibility (used by TUI)
-__all__ = ["cli", "_maybe_resume_claude", "_restore_tmux_session"]
+__all__ = ["_maybe_resume_claude", "_restore_tmux_session", "cli"]

@@ -50,7 +50,7 @@ def test_get_current_repo_not_git(tmp_path, monkeypatch):
 
 def test_load_womtrees_config(tmp_path):
     (tmp_path / ".womtrees.toml").write_text(
-        '[scripts]\nsetup = ["echo hello"]\n\n[copy]\nfiles = [".env"]\n'
+        '[scripts]\nsetup = ["echo hello"]\n\n[copy]\nfiles = [".env"]\n',
     )
 
     result = load_womtrees_config(str(tmp_path))
@@ -65,10 +65,10 @@ def test_load_womtrees_config_missing(tmp_path):
 
 def test_load_womtrees_config_local_override(tmp_path):
     (tmp_path / ".womtrees.toml").write_text(
-        '[scripts]\nsetup = ["npm install"]\nteardown = ["docker-compose down"]\n'
+        '[scripts]\nsetup = ["npm install"]\nteardown = ["docker-compose down"]\n',
     )
     (tmp_path / ".womtrees.local.toml").write_text(
-        '[scripts]\nsetup = ["pnpm install"]\n'
+        '[scripts]\nsetup = ["pnpm install"]\n',
     )
 
     result = load_womtrees_config(str(tmp_path))
@@ -81,7 +81,7 @@ def test_load_womtrees_config_local_override(tmp_path):
 
 def test_load_womtrees_config_local_only(tmp_path):
     (tmp_path / ".womtrees.local.toml").write_text(
-        '[scripts]\nsetup = ["echo local"]\n'
+        '[scripts]\nsetup = ["echo local"]\n',
     )
 
     result = load_womtrees_config(str(tmp_path))
@@ -124,7 +124,7 @@ def test_create_worktree_with_setup(git_repo, tmp_path):
 
     # Create .womtrees.toml
     (git_repo / ".womtrees.toml").write_text(
-        '[copy]\nfiles = [".env"]\n\n[scripts]\nsetup = ["echo setup_ran > .setup_marker"]\n'
+        '[copy]\nfiles = [".env"]\n\n[scripts]\nsetup = ["echo setup_ran > .setup_marker"]\n',
     )
 
     base_dir = tmp_path / "worktrees"
@@ -181,7 +181,7 @@ def test_setup_success_cleans_log(git_repo, tmp_path):
 
 def test_remove_worktree_with_teardown(git_repo, tmp_path):
     (git_repo / ".womtrees.toml").write_text(
-        '[scripts]\nteardown = ["echo teardown_ran > /tmp/womtrees-test-teardown-marker"]\n'
+        '[scripts]\nteardown = ["echo teardown_ran > /tmp/womtrees-test-teardown-marker"]\n',
     )
 
     base_dir = tmp_path / "worktrees"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from womtrees.config import get_config
@@ -126,7 +126,7 @@ MIGRATIONS = {
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _row_to_work_item(row: sqlite3.Row) -> WorkItem:
@@ -209,7 +209,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     row = cursor.fetchone()
     if row is None:
         conn.execute(
-            "INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
+            "INSERT INTO schema_version (version) VALUES (?)",
+            (SCHEMA_VERSION,),
         )
         conn.commit()
     else:
@@ -245,7 +246,7 @@ def create_work_item(
     existing = cursor.fetchone()
     if existing:
         raise ValueError(
-            f"Branch '{branch}' already has an active work item (#{existing['id']})"
+            f"Branch '{branch}' already has an active work item (#{existing['id']})",
         )
 
     upsert_repo(conn, repo_name, repo_path)
@@ -292,7 +293,9 @@ def list_work_items(
 
 
 def update_work_item(
-    conn: sqlite3.Connection, item_id: int, **fields: object
+    conn: sqlite3.Connection,
+    item_id: int,
+    **fields: object,
 ) -> WorkItem | None:
     if not fields:
         return get_work_item(conn, item_id)
@@ -358,7 +361,8 @@ def create_claude_session(
 
 
 def get_claude_session(
-    conn: sqlite3.Connection, session_id: int
+    conn: sqlite3.Connection,
+    session_id: int,
 ) -> ClaudeSession | None:
     cursor = conn.execute("SELECT * FROM claude_sessions WHERE id = ?", (session_id,))
     row = cursor.fetchone()
@@ -394,7 +398,9 @@ def list_claude_sessions(
 
 
 def update_claude_session(
-    conn: sqlite3.Connection, session_id: int, **fields: object
+    conn: sqlite3.Connection,
+    session_id: int,
+    **fields: object,
 ) -> ClaudeSession | None:
     if not fields:
         return get_claude_session(conn, session_id)
@@ -468,7 +474,8 @@ def create_pull_request(
     )
     conn.commit()
     row = conn.execute(
-        "SELECT * FROM pull_requests WHERE id = ?", (cursor.lastrowid,)
+        "SELECT * FROM pull_requests WHERE id = ?",
+        (cursor.lastrowid,),
     ).fetchone()
     return _row_to_pull_request(row)
 
@@ -490,11 +497,14 @@ def list_pull_requests(
 
 
 def update_pull_request(
-    conn: sqlite3.Connection, pr_id: int, **fields: object
+    conn: sqlite3.Connection,
+    pr_id: int,
+    **fields: object,
 ) -> PullRequest | None:
     if not fields:
         row = conn.execute(
-            "SELECT * FROM pull_requests WHERE id = ?", (pr_id,)
+            "SELECT * FROM pull_requests WHERE id = ?",
+            (pr_id,),
         ).fetchone()
         return _row_to_pull_request(row) if row else None
 

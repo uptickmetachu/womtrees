@@ -9,6 +9,7 @@ from textual.containers import Horizontal
 from textual.events import DescendantFocus
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
+
 from womtrees.config import get_config
 from womtrees.db import (
     create_pull_request,
@@ -19,6 +20,7 @@ from womtrees.db import (
     list_repos,
     list_work_items,
 )
+from womtrees.models import ClaudeSession, GitStats, WorkItem
 from womtrees.tui.board import KanbanBoard
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 from womtrees.tui.column import KanbanColumn
@@ -34,7 +36,6 @@ from womtrees.tui.dialogs import (
     MergeDialog,
     RebaseDialog,
 )
-from womtrees.models import ClaudeSession, GitStats, WorkItem
 from womtrees.worktree import (
     get_current_repo,
     get_diff_stats,
@@ -126,7 +127,8 @@ class WomtreesApp(App[None]):
             if self._debounce_timer is not None:
                 self._debounce_timer.stop()
             self._debounce_timer = self.set_timer(
-                self._DEBOUNCE_SECONDS, self._refresh_board
+                self._DEBOUNCE_SECONDS,
+                self._refresh_board,
             )
 
     def _refresh_board(self) -> None:
@@ -168,7 +170,11 @@ class WomtreesApp(App[None]):
 
         board = self.query_one("#board", KanbanBoard)
         board.refresh_data(
-            items, sessions, self.group_by_repo, pull_requests, git_stats=git_stats
+            items,
+            sessions,
+            self.group_by_repo,
+            pull_requests,
+            git_stats=git_stats,
         )
 
         self._update_status_bar(items, sessions)
@@ -182,7 +188,7 @@ class WomtreesApp(App[None]):
         card = self._get_focused_card()
         if isinstance(card, WorkItemCard):
             return ("item", card.work_item.id)
-        elif isinstance(card, UnmanagedCard):
+        if isinstance(card, UnmanagedCard):
             return ("unmanaged", card.branch)
         return None
 
@@ -207,7 +213,9 @@ class WomtreesApp(App[None]):
                     return
 
     def _update_status_bar(
-        self, items: list[WorkItem], sessions: list[ClaudeSession]
+        self,
+        items: list[WorkItem],
+        sessions: list[ClaudeSession],
     ) -> None:
         counts = {"todo": 0, "working": 0, "input": 0, "review": 0, "done": 0}
         for item in items:
@@ -459,7 +467,9 @@ class WomtreesApp(App[None]):
         )
 
     def _on_edit_dialog(
-        self, result: dict[str, str | None] | None, item_id: int
+        self,
+        result: dict[str, str | None] | None,
+        item_id: int,
     ) -> None:
         if result is None:
             return
@@ -831,7 +841,8 @@ class WomtreesApp(App[None]):
             return
         if card.work_item.status not in ("working", "input", "review"):
             self.notify(
-                "Can only create PR for working/input/review items", severity="warning"
+                "Can only create PR for working/input/review items",
+                severity="warning",
             )
             return
         if not card.work_item.worktree_path:
@@ -848,14 +859,19 @@ class WomtreesApp(App[None]):
                 prompt=config.pr_prompt,
                 cwd=item.worktree_path,
                 on_result=lambda: self._detect_and_store_pr(
-                    item.id, item.repo_path, item.branch
+                    item.id,
+                    item.repo_path,
+                    item.branch,
                 ),
             ),
             self._on_claude_dialog_dismiss,
         )
 
     def _detect_and_store_pr(
-        self, item_id: int, repo_path: str, branch: str
+        self,
+        item_id: int,
+        repo_path: str,
+        branch: str,
     ) -> dict[str, str | int] | None:
         """Detect a newly-created PR and store it in the DB."""
         from womtrees.services.github import detect_pr

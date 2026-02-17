@@ -8,7 +8,6 @@ from textual.containers import Horizontal
 from womtrees.models import ClaudeSession, GitStats, PullRequest, WorkItem
 from womtrees.tui.column import KanbanColumn
 
-
 STATUSES = ["todo", "working", "input", "review"]
 
 # Map Claude session states to the kanban column they should appear in

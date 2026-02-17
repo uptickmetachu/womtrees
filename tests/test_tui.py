@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from womtrees.models import ClaudeSession, WorkItem
-from womtrees.tui.card import WorkItemCard, UnmanagedCard, _time_ago
-from womtrees.tui.board import KanbanBoard, CLAUDE_STATE_TO_STATUS
-from womtrees.tui.column import KanbanColumn
-
+from womtrees.tui.board import CLAUDE_STATE_TO_STATUS, KanbanBoard
+from womtrees.tui.card import UnmanagedCard, _time_ago
 
 # -- Fixtures --
 
@@ -27,7 +25,7 @@ def _make_item(
     tmux_session: str | None = None,
     status: str = "todo",
 ) -> WorkItem:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     return WorkItem(
         id=id,
         repo_name=repo_name,
@@ -56,7 +54,7 @@ def _make_session(
     prompt: str | None = None,
     claude_session_id: str | None = None,
 ) -> ClaudeSession:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     return ClaudeSession(
         id=id,
         work_item_id=work_item_id,
@@ -79,25 +77,25 @@ def _make_session(
 
 class TestTimeAgo:
     def test_recent(self):
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         assert _time_ago(now) == "<1m"
 
     def test_minutes(self):
         from datetime import timedelta
 
-        t = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+        t = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
         assert _time_ago(t) == "30m"
 
     def test_hours(self):
         from datetime import timedelta
 
-        t = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+        t = (datetime.now(UTC) - timedelta(hours=5)).isoformat()
         assert _time_ago(t) == "5h"
 
     def test_days(self):
         from datetime import timedelta
 
-        t = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+        t = (datetime.now(UTC) - timedelta(days=3)).isoformat()
         assert _time_ago(t) == "3d"
 
     def test_invalid(self):
@@ -191,8 +189,9 @@ class TestCheckRefresh:
     @pytest.mark.asyncio
     async def test_refreshes_when_mtime_changes(self, tmp_path):
         """_check_refresh triggers refresh when mtime changes."""
-        from womtrees.tui.app import WomtreesApp
         import os
+
+        from womtrees.tui.app import WomtreesApp
 
         db_file = tmp_path / "womtrees.db"
         db_file.write_text("v1")
@@ -238,7 +237,8 @@ async def test_app_mounts():
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()
@@ -273,7 +273,8 @@ async def test_app_shows_items():
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()
@@ -304,7 +305,8 @@ async def test_app_unmanaged_sessions():
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()
@@ -327,7 +329,8 @@ async def test_app_toggle_grouping():
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()
@@ -347,8 +350,9 @@ async def test_app_toggle_grouping():
 @pytest.mark.asyncio
 async def test_app_status_bar():
     """Status bar should show item counts."""
-    from womtrees.tui.app import WomtreesApp
     from textual.widgets import Static
+
+    from womtrees.tui.app import WomtreesApp
 
     items = [
         _make_item(id=1, status="todo"),
@@ -359,7 +363,8 @@ async def test_app_status_bar():
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()
@@ -390,7 +395,8 @@ async def test_app_column_navigation():
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()
@@ -408,7 +414,7 @@ async def test_app_column_navigation():
                     await pilot.press("h")
                     assert app.active_column_idx == 1  # working (skips empty input)
                     await pilot.press("h")
-                    assert app.active_column_idx == 0  # todo
+                    assert app.active_column_idx == 0  # TODO
                     await pilot.press("h")
                     assert app.active_column_idx == 0  # stays at 0
 
@@ -417,12 +423,12 @@ async def test_app_column_navigation():
 async def test_app_help_dialog():
     """Pressing ? should open help dialog."""
     from womtrees.tui.app import WomtreesApp
-    from womtrees.tui.dialogs import HelpDialog
 
     with (
         patch("womtrees.tui.app.get_connection") as mock_conn,
         patch(
-            "womtrees.tui.app.get_current_repo", return_value=("myrepo", "/tmp/myrepo")
+            "womtrees.tui.app.get_current_repo",
+            return_value=("myrepo", "/tmp/myrepo"),
         ),
     ):
         conn = MagicMock()

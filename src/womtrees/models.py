@@ -13,7 +13,7 @@ class WorkItem:
     prompt: str | None
     worktree_path: str | None
     tmux_session: str | None
-    status: str  # todo, working, input, review, done
+    status: str  # TODO, working, input, review, done
     created_at: str
     updated_at: str
 

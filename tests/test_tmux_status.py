@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from womtrees.cli import cli
 from womtrees.claude import configure_tmux_status_bar
+from womtrees.cli import cli
 from womtrees.db import _ensure_schema, create_claude_session
 
 

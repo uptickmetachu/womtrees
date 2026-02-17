@@ -9,7 +9,6 @@ from textual.widgets import Static
 from womtrees.models import ClaudeSession, GitStats, PullRequest, WorkItem
 from womtrees.tui.card import UnmanagedCard, WorkItemCard
 
-
 STATUS_COLORS = {
     "todo": "$text-muted",
     "working": "$primary",

@@ -223,7 +223,8 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
         ),
         patch("womtrees.tmux.is_available", return_value=True),
         patch(
-            "womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")
+            "womtrees.tmux.create_session",
+            return_value=("myrepo/feat-x", "%0"),
         ) as mock_create,
         patch("womtrees.tmux.set_environment") as mock_setenv,
         patch("womtrees.tmux.split_pane", return_value="%1") as mock_split,
@@ -239,7 +240,9 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
 
         mock_create.assert_called_once()
         mock_setenv.assert_called_once_with(
-            "myrepo/feat-x", "WOMTREE_WORK_ITEM_ID", "1"
+            "myrepo/feat-x",
+            "WOMTREE_WORK_ITEM_ID",
+            "1",
         )
         mock_split.assert_called_once()
         mock_swap.assert_called_once()  # claude_pane=left triggers swap
@@ -406,7 +409,8 @@ def test_attach_restores_missing_session(runner, db_conn):
         ),
         patch("womtrees.tmux.session_exists") as mock_exists,
         patch(
-            "womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")
+            "womtrees.tmux.create_session",
+            return_value=("myrepo-feat-x", "%0"),
         ) as mock_create,
         patch("womtrees.tmux.set_environment") as mock_setenv,
         patch("womtrees.tmux.attach") as mock_attach,
@@ -472,7 +476,10 @@ def test_attach_resumes_dead_session(runner, db_conn, tmp_path):
 
         sessions = list_claude_sessions(conn)
         update_claude_session(
-            conn, sessions[0].id, claude_session_id="test-uuid-123", pid=99999
+            conn,
+            sessions[0].id,
+            claude_session_id="test-uuid-123",
+            pid=99999,
         )
 
         mock_send_keys.reset_mock()
@@ -628,7 +635,10 @@ def test_attach_skips_resume_if_another_session_alive(runner, db_conn, tmp_path)
         # First session: dead (PID 11111)
         sessions = list_claude_sessions(conn)
         update_claude_session(
-            conn, sessions[0].id, claude_session_id="uuid-1", pid=11111
+            conn,
+            sessions[0].id,
+            claude_session_id="uuid-1",
+            pid=11111,
         )
 
         # Create a second work item + session with a live PID
@@ -664,7 +674,8 @@ def test_todo_with_repo_option(runner, db_conn, tmp_path):
         ),
     ):
         result = runner.invoke(
-            cli, ["todo", "-b", "feat/x", "-r", str(target_repo), "some task"]
+            cli,
+            ["todo", "-b", "feat/x", "-r", str(target_repo), "some task"],
         )
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
@@ -689,7 +700,8 @@ def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
         patch("womtrees.cli.utils.get_current_repo", return_value=None),
     ):
         result = runner.invoke(
-            cli, ["todo", "-b", "feat/y", "-r", str(target_repo), "some task"]
+            cli,
+            ["todo", "-b", "feat/y", "-r", str(target_repo), "some task"],
         )
         assert result.exit_code == 0
         assert "Created TODO #1" in result.output
@@ -768,7 +780,8 @@ def test_edit_branch_active_item(runner, db_conn, tmp_path):
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.services.workitem.rename_branch") as mock_rename,
         patch(
-            "womtrees.tmux.rename_session", return_value="myrepo-feat-new"
+            "womtrees.tmux.rename_session",
+            return_value="myrepo-feat-new",
         ) as mock_rename_session,
     ):
         runner.invoke(cli, ["todo", "-b", "feat/old"])
@@ -896,7 +909,7 @@ def test_create_with_repo_option(runner, db_conn, tmp_path):
 
 
 def test_cd_tree_default(runner, tmp_path):
-    """cd with no flags prints worktree toplevel."""
+    """Cd with no flags prints worktree toplevel."""
     mock_result = MagicMock()
     mock_result.stdout = f"{tmp_path}/my-worktree\n"
     mock_result.returncode = 0
@@ -908,7 +921,7 @@ def test_cd_tree_default(runner, tmp_path):
 
 
 def test_cd_root(runner, tmp_path):
-    """cd --root prints the main repository root."""
+    """Cd --root prints the main repository root."""
     with patch(
         "womtrees.worktree.get_current_repo",
         return_value=("myrepo", str(tmp_path / "myrepo")),
@@ -919,7 +932,7 @@ def test_cd_root(runner, tmp_path):
 
 
 def test_cd_root_not_in_repo(runner):
-    """cd --root outside a git repo fails."""
+    """Cd --root outside a git repo fails."""
     with patch("womtrees.worktree.get_current_repo", return_value=None):
         result = runner.invoke(cli, ["cd", "--root"])
         assert result.exit_code != 0
@@ -927,7 +940,7 @@ def test_cd_root_not_in_repo(runner):
 
 
 def test_cd_tree_not_in_repo(runner):
-    """cd --tree outside a git repo fails."""
+    """Cd --tree outside a git repo fails."""
     with patch(
         "subprocess.run",
         side_effect=subprocess.CalledProcessError(128, "git"),

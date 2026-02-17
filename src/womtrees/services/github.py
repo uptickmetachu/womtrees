@@ -20,7 +20,9 @@ class GitHubUnavailableError(Exception):
     def __init__(self, reason: str = "") -> None:
         self.reason = reason
         super().__init__(
-            f"GitHub CLI unavailable: {reason}" if reason else "GitHub CLI unavailable."
+            f"GitHub CLI unavailable: {reason}"
+            if reason
+            else "GitHub CLI unavailable.",
         )
 
 

@@ -122,11 +122,11 @@ class ClaudeStreamDialog(ModalScreen[dict[str, Any] | None]):
                     inp = event.tool_input
                     if event.tool_name == "Bash" and inp.get("command"):
                         detail = f"  $ {inp['command']}"
-                    elif event.tool_name == "Read" and inp.get("file_path"):
-                        detail = f"  {inp['file_path']}"
-                    elif event.tool_name == "Write" and inp.get("file_path"):
-                        detail = f"  {inp['file_path']}"
-                    elif event.tool_name == "Edit" and inp.get("file_path"):
+                    elif (
+                        (event.tool_name == "Read" and inp.get("file_path"))
+                        or (event.tool_name == "Write" and inp.get("file_path"))
+                        or (event.tool_name == "Edit" and inp.get("file_path"))
+                    ):
                         detail = f"  {inp['file_path']}"
                     elif event.tool_name == "Glob" and inp.get("pattern"):
                         detail = f"  {inp['pattern']}"

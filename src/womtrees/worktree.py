@@ -115,7 +115,11 @@ def create_worktree(repo_path: str, branch: str, base_dir: Path) -> Path:
         setup_cmds = config.get("scripts", {}).get("setup", [])
         if setup_cmds:
             script_result = _run_scripts(
-                setup_cmds, worktree_path, repo_path, "setup", branch
+                setup_cmds,
+                worktree_path,
+                repo_path,
+                "setup",
+                branch,
             )
             if not script_result.success:
                 # Roll back: remove the worktree
@@ -140,7 +144,9 @@ class SetupScriptError(Exception):
 
 
 def _run_womtrees_copy(
-    config: dict[str, Any], repo_path: str, worktree_path: Path
+    config: dict[str, Any],
+    repo_path: str,
+    worktree_path: Path,
 ) -> None:
     """Copy files from source repo to worktree based on config."""
     copy_files = config.get("copy", {}).get("files", [])
@@ -450,7 +456,11 @@ def remove_worktree(
                 if branch is None:
                     branch = worktree_path.name
                 result = _run_scripts(
-                    teardown_cmds, worktree_path, str(repo_path), "teardown", branch
+                    teardown_cmds,
+                    worktree_path,
+                    str(repo_path),
+                    "teardown",
+                    branch,
                 )
                 if not result.success:
                     warning = f"Teardown scripts failed. Log: {result.log_path}"
@@ -460,7 +470,8 @@ def remove_worktree(
 
 
 def _remove_worktree_git(
-    worktree_path: Path, repo_path: str | Path | None = None
+    worktree_path: Path,
+    repo_path: str | Path | None = None,
 ) -> None:
     """Low-level git worktree remove + prune."""
     cmd = ["git"]

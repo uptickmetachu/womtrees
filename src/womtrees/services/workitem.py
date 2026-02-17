@@ -8,13 +8,17 @@ import subprocess
 from womtrees.config import Config
 from womtrees.db import (
     create_claude_session,
-    create_work_item as db_create_work_item,
-    delete_work_item as db_delete_work_item,
     get_work_item,
     list_claude_sessions,
     list_pull_requests,
     update_claude_session,
     update_work_item,
+)
+from womtrees.db import (
+    create_work_item as db_create_work_item,
+)
+from womtrees.db import (
+    delete_work_item as db_delete_work_item,
 )
 from womtrees.models import WorkItem
 from womtrees.worktree import (
@@ -23,7 +27,6 @@ from womtrees.worktree import (
     rename_branch,
     sanitize_branch_name,
 )
-
 
 _SENTINEL = object()  # distinguishes "not provided" from None for prompt editing
 
@@ -43,14 +46,17 @@ class InvalidStateError(Exception):
     """Raised when a work item is in the wrong state for the requested transition."""
 
     def __init__(
-        self, item_id: int, current: str, expected: str | tuple[str, ...]
+        self,
+        item_id: int,
+        current: str,
+        expected: str | tuple[str, ...],
     ) -> None:
         self.item_id = item_id
         self.current = current
         self.expected = expected if isinstance(expected, tuple) else (expected,)
         exp = " or ".join(f"'{s}'" for s in self.expected)
         super().__init__(
-            f"Cannot transition #{item_id}: status is '{current}' (expected {exp})."
+            f"Cannot transition #{item_id}: status is '{current}' (expected {exp}).",
         )
 
 
@@ -61,7 +67,7 @@ class DuplicateBranchError(Exception):
         self.branch = branch
         self.existing_item_id = existing_item_id
         super().__init__(
-            f"Branch '{branch}' is already used by active WorkItem #{existing_item_id}."
+            f"Branch '{branch}' is already used by active WorkItem #{existing_item_id}.",
         )
 
 
@@ -72,7 +78,7 @@ class OpenPullRequestError(Exception):
         self.item_id = item_id
         self.pr_number = pr_number
         super().__init__(
-            f"Cannot rename branch: WorkItem #{item_id} has open PR #{pr_number}."
+            f"Cannot rename branch: WorkItem #{item_id} has open PR #{pr_number}.",
         )
 
 
@@ -100,7 +106,13 @@ def create_work_item_todo(
     Raises ValueError if the branch already has an active work item.
     """
     return db_create_work_item(
-        conn, repo_name, repo_path, branch, prompt, status="todo", name=name
+        conn,
+        repo_name,
+        repo_path,
+        branch,
+        prompt,
+        status="todo",
+        name=name,
     )
 
 
@@ -227,7 +239,9 @@ def delete_work_item(
 
     if item.status == "working" and not force:
         raise InvalidStateError(
-            item_id, item.status, ("todo", "input", "review", "done")
+            item_id,
+            item.status,
+            ("todo", "input", "review", "done"),
         )
 
     # Kill tmux session if it exists
@@ -246,7 +260,8 @@ def delete_work_item(
 
 
 def merge_work_item(
-    conn: sqlite3.Connection, item_id: int
+    conn: sqlite3.Connection,
+    item_id: int,
 ) -> tuple[WorkItem, str | None]:
     """Merge a review item's branch and mark as done.
 
@@ -343,14 +358,18 @@ def edit_work_item(
             new_session_name = tmux.sanitize_session_name(raw_name)
             if tmux.session_exists(item.tmux_session):
                 new_session_name = tmux.rename_session(
-                    item.tmux_session, new_session_name
+                    item.tmux_session,
+                    new_session_name,
                 )
             updates["tmux_session"] = new_session_name
 
             # Update claude_sessions so hook lookups still work
             for cs in list_claude_sessions(conn, work_item_id=item.id):
                 update_claude_session(
-                    conn, cs.id, tmux_session=new_session_name, branch=branch
+                    conn,
+                    cs.id,
+                    tmux_session=new_session_name,
+                    branch=branch,
                 )
 
         updates["branch"] = branch

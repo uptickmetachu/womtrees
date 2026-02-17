@@ -11,7 +11,6 @@ from womtrees.db import (
     update_work_item,
 )
 
-
 # -- Hook subcommands (called by Claude Code hooks) --
 # These must be fast: minimal imports, direct DB writes.
 

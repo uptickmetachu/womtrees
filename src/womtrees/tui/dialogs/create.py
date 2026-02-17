@@ -168,7 +168,7 @@ class CreateDialog(ModalScreen[dict[str, str | None] | None]):
                 "mode": self.mode,
                 "repo_name": repo_name,
                 "repo_path": repo_path,
-            }
+            },
         )
 
     def action_cancel(self) -> None:

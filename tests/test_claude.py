@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from womtrees.claude import detect_context, install_global_hooks, is_pid_alive

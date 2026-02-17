@@ -41,7 +41,7 @@ def create_session(name: str, working_dir: str) -> tuple[str, str]:
             "-P",
             "-F",
             "#{pane_id}",
-        ]
+        ],
     )
     pane_id = result.stdout.strip()
     return name, pane_id
@@ -65,7 +65,7 @@ def split_pane(session: str, direction: str, working_dir: str) -> str:
             "-P",
             "-F",
             "#{pane_id}",
-        ]
+        ],
     )
     return result.stdout.strip()
 

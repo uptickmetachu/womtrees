@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 CLAUDE_SETTINGS_DIR = Path.home() / ".claude"
 CLAUDE_SETTINGS_FILE = CLAUDE_SETTINGS_DIR / "settings.json"
 
@@ -21,9 +20,9 @@ WOMTREE_HOOKS = {
                     {
                         "type": "command",
                         "command": "wt hook heartbeat",
-                    }
+                    },
                 ],
-            }
+            },
         ],
         "PostToolUse": [
             {
@@ -32,9 +31,9 @@ WOMTREE_HOOKS = {
                     {
                         "type": "command",
                         "command": "wt hook heartbeat",
-                    }
+                    },
                 ],
-            }
+            },
         ],
         "Notification": [
             {
@@ -43,7 +42,7 @@ WOMTREE_HOOKS = {
                     {
                         "type": "command",
                         "command": "wt hook input",
-                    }
+                    },
                 ],
             },
             {
@@ -52,7 +51,7 @@ WOMTREE_HOOKS = {
                     {
                         "type": "command",
                         "command": "wt hook input",
-                    }
+                    },
                 ],
             },
         ],
@@ -63,9 +62,9 @@ WOMTREE_HOOKS = {
                     {
                         "type": "command",
                         "command": "wt hook input",
-                    }
+                    },
                 ],
-            }
+            },
         ],
         "Stop": [
             {
@@ -74,11 +73,11 @@ WOMTREE_HOOKS = {
                     {
                         "type": "command",
                         "command": "wt hook stop",
-                    }
+                    },
                 ],
-            }
+            },
         ],
-    }
+    },
 }
 
 
@@ -88,7 +87,7 @@ def _is_wt_hook_entry(entry: dict[str, object]) -> bool:
     if isinstance(hooks, list):
         for handler in hooks:
             if isinstance(handler, dict) and "wt hook" in str(
-                handler.get("command", "")
+                handler.get("command", ""),
             ):
                 return True
     # Old format: {"command": "wt hook ..."}
@@ -129,9 +128,7 @@ def configure_tmux_status_bar() -> bool:
             stripped.startswith("set")
             and "status-right" in stripped
             and not stripped.startswith("#")
-        ):
-            new_lines.append(f"# {line}  # replaced by womtrees")
-        elif (
+        ) or (
             stripped.startswith("set")
             and "status-interval" in stripped
             and not stripped.startswith("#")

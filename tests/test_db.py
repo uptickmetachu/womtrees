@@ -9,7 +9,6 @@ from womtrees.db import (
     create_pull_request,
     create_work_item,
     delete_work_item,
-    get_connection,
     get_work_item,
     list_repos,
     list_work_items,
@@ -27,7 +26,11 @@ def _in_memory_conn() -> sqlite3.Connection:
 def test_create_and_get():
     conn = _in_memory_conn()
     item = create_work_item(
-        conn, "myrepo", "/tmp/myrepo", "feat/auth", prompt="Add login"
+        conn,
+        "myrepo",
+        "/tmp/myrepo",
+        "feat/auth",
+        prompt="Add login",
     )
     assert item.id == 1
     assert item.repo_name == "myrepo"

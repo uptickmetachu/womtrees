@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from womtrees.tmux import (
     attach,
@@ -43,7 +43,7 @@ def test_create_session(mock_exists, mock_run):
             "-P",
             "-F",
             "#{pane_id}",
-        ]
+        ],
     )
 
 
@@ -73,7 +73,7 @@ def test_split_pane_vertical(mock_run):
             "-P",
             "-F",
             "#{pane_id}",
-        ]
+        ],
     )
 
 
@@ -94,7 +94,7 @@ def test_split_pane_horizontal(mock_run):
             "-P",
             "-F",
             "#{pane_id}",
-        ]
+        ],
     )
 
 
@@ -108,7 +108,7 @@ def test_swap_pane(mock_run):
 def test_send_keys(mock_run):
     send_keys("mysession:0.1", "echo hello")
     mock_run.assert_called_once_with(
-        ["tmux", "send-keys", "-t", "mysession:0.1", "echo hello", "Enter"]
+        ["tmux", "send-keys", "-t", "mysession:0.1", "echo hello", "Enter"],
     )
 
 
@@ -116,7 +116,8 @@ def test_send_keys(mock_run):
 def test_kill_session(mock_run):
     kill_session("mysession")
     mock_run.assert_called_once_with(
-        ["tmux", "kill-session", "-t", "mysession"], check=False
+        ["tmux", "kill-session", "-t", "mysession"],
+        check=False,
     )
 
 
@@ -136,7 +137,7 @@ def test_session_exists_false(mock_run):
 def test_set_environment(mock_run):
     set_environment("mysession", "WOMTREE_WORK_ITEM_ID", "42")
     mock_run.assert_called_once_with(
-        ["tmux", "set-environment", "-t", "mysession", "WOMTREE_WORK_ITEM_ID", "42"]
+        ["tmux", "set-environment", "-t", "mysession", "WOMTREE_WORK_ITEM_ID", "42"],
     )
 
 
@@ -170,7 +171,7 @@ def test_rename_session(mock_exists, mock_run):
     result = rename_session("old-session", "repo/new-branch")
     assert result == "repo-new-branch"
     mock_run.assert_called_once_with(
-        ["tmux", "rename-session", "-t", "old-session", "repo-new-branch"]
+        ["tmux", "rename-session", "-t", "old-session", "repo-new-branch"],
     )
 
 
@@ -181,5 +182,5 @@ def test_rename_session_name_conflict(mock_exists, mock_run):
     result = rename_session("old-session", "repo/branch")
     assert result == "repo-branch-2"
     mock_run.assert_called_once_with(
-        ["tmux", "rename-session", "-t", "old-session", "repo-branch-2"]
+        ["tmux", "rename-session", "-t", "old-session", "repo-branch-2"],
     )

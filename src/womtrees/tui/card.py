@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from textual.widget import Widget
-from textual.reactive import reactive
 from textual.app import ComposeResult
+from textual.widget import Widget
 from textual.widgets import Static
 
 from womtrees.models import ClaudeSession, GitStats, PullRequest, WorkItem
@@ -15,7 +14,7 @@ def _time_ago(iso_str: str) -> str:
     """Return a human-readable time-ago string from an ISO 8601 timestamp."""
     try:
         then = datetime.fromisoformat(iso_str)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         delta = now - then
         minutes = int(delta.total_seconds() / 60)
         if minutes < 1:
@@ -127,7 +126,7 @@ class WorkItemCard(Widget, can_focus=True):
             cls = f"session-{session.state}"
             indicator = " *" if session.state == "waiting" else ""
             children.append(
-                Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
+                Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls),
             )
         for pr in self.pull_requests:
             cls = f"pr-{pr.status}"
@@ -167,7 +166,7 @@ class WorkItemCard(Widget, can_focus=True):
         parts: list[str] = []
         if self.git_stats.insertions or self.git_stats.deletions:
             parts.append(
-                f"[green]+{self.git_stats.insertions}[/] [red]-{self.git_stats.deletions}[/]"
+                f"[green]+{self.git_stats.insertions}[/] [red]-{self.git_stats.deletions}[/]",
             )
         if self.git_stats.uncommitted:
             uc = "[yellow]\\[uncommitted"
@@ -235,7 +234,7 @@ class UnmanagedCard(Widget, can_focus=True):
             cls = f"session-{session.state}"
             indicator = " *" if session.state == "waiting" else ""
             children.append(
-                Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls)
+                Static(f"C{session.id}: {session.state}{indicator} {age}", classes=cls),
             )
         return children
 

@@ -525,7 +525,9 @@ def test_hook_heartbeat_captures_session_id(runner, db_conn):
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(
-            cli, ["hook", "heartbeat"], input='{"session_id": "abc-123-def"}'
+            cli,
+            ["hook", "heartbeat"],
+            input='{"session_id": "abc-123-def"}',
         )
         assert result.exit_code == 0
 
@@ -567,7 +569,9 @@ def test_hook_heartbeat_updates_session_id(runner, db_conn):
         patch("womtrees.claude.detect_context", return_value=mock_context),
     ):
         result = runner.invoke(
-            cli, ["hook", "heartbeat"], input='{"session_id": "new-uuid-456"}'
+            cli,
+            ["hook", "heartbeat"],
+            input='{"session_id": "new-uuid-456"}',
         )
         assert result.exit_code == 0
 

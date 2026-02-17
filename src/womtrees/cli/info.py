@@ -37,7 +37,7 @@ def list_cmd(show_all: bool) -> None:
 
     # Header
     click.echo(
-        f"{'ID':>4}  {'Status':<8}  {'Repo':<15}  {'Branch':<25}  {'Claude':<20}  {'Prompt'}"
+        f"{'ID':>4}  {'Status':<8}  {'Repo':<15}  {'Branch':<25}  {'Claude':<20}  {'Prompt'}",
     )
     click.echo("-" * 100)
 
@@ -52,7 +52,7 @@ def list_cmd(show_all: bool) -> None:
         if item.prompt and len(item.prompt) > 25:
             prompt_display += "..."
         click.echo(
-            f"{item.id:>4}  {item.status:<8}  {item.repo_name:<15}  {item.branch:<25}  {claude_info:<20}  {prompt_display}"
+            f"{item.id:>4}  {item.status:<8}  {item.repo_name:<15}  {item.branch:<25}  {claude_info:<20}  {prompt_display}",
         )
 
 
@@ -88,7 +88,10 @@ def _format_tmux_status(conn: sqlite3.Connection) -> str:
 @click.command()
 @click.argument("item_id", type=int, required=False)
 @click.option(
-    "--tmux", "tmux_mode", is_flag=True, help="Compact output for tmux status bar."
+    "--tmux",
+    "tmux_mode",
+    is_flag=True,
+    help="Compact output for tmux status bar.",
 )
 def status(item_id: int | None, tmux_mode: bool) -> None:
     """Show status of work items."""
@@ -127,7 +130,7 @@ def status(item_id: int | None, tmux_mode: bool) -> None:
 
     total = sum(counts.values())
     click.echo(
-        f"Total: {total}  |  todo: {counts['todo']}  working: {counts['working']}  review: {counts['review']}  done: {counts['done']}"
+        f"Total: {total}  |  todo: {counts['todo']}  working: {counts['working']}  review: {counts['review']}  done: {counts['done']}",
     )
 
 
@@ -150,14 +153,14 @@ def sessions_cmd() -> None:
         return
 
     click.echo(
-        f"{'Session':>8}  {'WorkItem':>8}  {'Repo':<15}  {'Branch':<25}  {'State':<10}  {'Pane'}"
+        f"{'Session':>8}  {'WorkItem':>8}  {'Repo':<15}  {'Branch':<25}  {'State':<10}  {'Pane'}",
     )
     click.echo("-" * 85)
 
     for s in sessions:
         wi_display = f"#{s.work_item_id}" if s.work_item_id else "(none)"
         click.echo(
-            f"{'C' + str(s.id):>8}  {wi_display:>8}  {s.repo_name:<15}  {s.branch:<25}  {s.state:<10}  {s.tmux_pane}"
+            f"{'C' + str(s.id):>8}  {wi_display:>8}  {s.repo_name:<15}  {s.branch:<25}  {s.state:<10}  {s.tmux_pane}",
         )
 
 
@@ -291,7 +294,12 @@ def cycle(filter: str) -> None:
 
 
 @click.command("cd")
-@click.option("--root", "mode", flag_value="root", help="Print the main repository root.")
+@click.option(
+    "--root",
+    "mode",
+    flag_value="root",
+    help="Print the main repository root.",
+)
 @click.option(
     "--tree",
     "mode",
@@ -348,12 +356,12 @@ def attach(item_id: int, session_id: int | None) -> None:
             raise click.ClickException(f"WorkItem #{item_id} not found.")
         if item.status == "todo":
             raise click.ClickException(
-                f"WorkItem #{item_id} is still in TODO. Start it first with: wt start {item_id}"
+                f"WorkItem #{item_id} is still in TODO. Start it first with: wt start {item_id}",
             )
         if not item.tmux_session or not tmux.session_exists(item.tmux_session):
             if not item.worktree_path and not item.repo_path:
                 raise click.ClickException(
-                    f"WorkItem #{item_id} has no tmux session and no worktree path to restore into."
+                    f"WorkItem #{item_id} has no tmux session and no worktree path to restore into.",
                 )
             session_name = _restore_tmux_session(conn, item)
             click.echo(f"Restored tmux session '{session_name}' for #{item_id}")
