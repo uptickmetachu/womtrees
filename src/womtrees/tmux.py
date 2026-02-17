@@ -117,14 +117,6 @@ def set_environment(session: str, key: str, value: str) -> None:
     _run(["tmux", "set-environment", "-t", session, key, value])
 
 
-def set_status_left(session: str, message: str) -> None:
-    """Set the tmux status-left for a session."""
-    _run(
-        ["tmux", "set-option", "-t", session, "status-left", message],
-        check=False,
-    )
-
-
 def attach(name: str) -> None:
     """Attach or switch to a tmux session."""
     if os.environ.get("TMUX"):
