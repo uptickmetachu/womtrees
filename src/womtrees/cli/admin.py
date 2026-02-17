@@ -9,11 +9,18 @@ from womtrees.config import ensure_config, get_config
 
 
 @click.command()
-def board() -> None:
+@click.option(
+    "--dialog",
+    type=click.Choice(["todo", "create"]),
+    default=None,
+    help="Open a specific dialog instead of the full board.",
+)
+@click.option("--repo", default=None, help="Repository path (for dialog mode).")
+def board(dialog: str | None, repo: str | None) -> None:
     """Open the kanban board TUI."""
     from womtrees.tui.app import WomtreesApp
 
-    app = WomtreesApp()
+    app = WomtreesApp(dialog=dialog, repo_override=repo)
     app.run()
 
 

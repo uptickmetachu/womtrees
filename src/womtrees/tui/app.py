@@ -86,13 +86,20 @@ class WomtreesApp(App[None]):
 
     _DEBOUNCE_SECONDS = 1.0
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        dialog: str | None = None,
+        repo_override: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self.group_by_repo = True
         self.active_column_idx = 0
         self.repo_context = get_current_repo()
         self.last_focused_card: WorkItemCard | UnmanagedCard | None = None
         self._debounce_timer: Timer | None = None
+        self._dialog_mode = dialog
+        self._repo_override = repo_override
 
     def on_descendant_focus(self, event: DescendantFocus) -> None:
         """Track the last focused card for the command palette."""
@@ -100,6 +107,8 @@ class WomtreesApp(App[None]):
             self.last_focused_card = event.widget
 
     def compose(self) -> ComposeResult:
+        if self._dialog_mode:
+            return
         yield Header()
         yield KanbanBoard(id="board")
         with Horizontal(id="status-bar"):
@@ -107,12 +116,41 @@ class WomtreesApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        if self._dialog_mode:
+            self._open_dialog()
+            return
+
         self._db_path = get_config().base_dir / "womtrees.db"
         self._wal_path = self._db_path.parent / (self._db_path.name + "-wal")
         self._last_db_mtime: float = 0
         self._refresh_board()
         self.set_interval(0.5, self._check_refresh)
         self.set_interval(10, self._refresh_board)
+
+    def _open_dialog(self) -> None:
+        """Open a dialog directly (popup mode). Exit when dialog is dismissed."""
+        from pathlib import Path
+
+        repo_context = self.repo_context
+        if self._repo_override:
+            resolved = Path(self._repo_override).expanduser().resolve()
+            repo_context = (resolved.name, str(resolved))
+
+        repos = self._get_repos_for_dialog()
+        mode = self._dialog_mode or "todo"
+        self.push_screen(
+            CreateDialog(mode=mode, repos=repos, default_repo=repo_context),
+            self._on_popup_dialog_result,
+        )
+
+    def _on_popup_dialog_result(self, result: dict[str, str | None] | None) -> None:
+        """Handle dialog result in popup mode — perform action then exit."""
+        if result is None:
+            self.exit()
+            return
+
+        self._on_create_dialog(result)
+        self.exit()
 
     def _check_refresh(self) -> None:
         """Check DB/WAL file mtime; debounce rapid changes into one refresh."""
