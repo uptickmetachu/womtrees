@@ -49,9 +49,9 @@ class DiffApp(App[None]):
         Binding("ctrl+j", "next_file", "Next file", show=False, priority=True),
         Binding("ctrl+k", "prev_file", "Prev file", show=False, priority=True),
         Binding(
-            "ctrl+s", "submit_clipboard", "Submit (clipboard)", show=True, priority=True
+            "ctrl+c", "submit_clipboard", "Copy comments", show=True, priority=True
         ),
-        Binding("shift+s", "submit_claude", "Submit + Claude", show=True),
+        Binding("ctrl+x", "clear_comments", "Clear comments", show=True, priority=True),
         Binding("m", "cycle_mode", "Cycle mode", show=True),
     ]
 
@@ -216,6 +216,40 @@ class DiffApp(App[None]):
                 self.notify("Deleted comment")
                 return
 
+    def on_diff_view_edit_comment_at_cursor(
+        self, event: DiffView.EditCommentAtCursor
+    ) -> None:
+        if not self._diff.files:
+            return
+        current_file = self._diff.files[self._current_file_idx].path
+        diff_view = self.query_one("#diff-view", DiffView)
+        cursor = diff_view.cursor
+
+        for i, c in enumerate(self._comments):
+            if c.file == current_file and c.start_line <= cursor <= c.end_line:
+                from womtrees.tui.comment_input import CommentInputDialog
+
+                context = f"{c.file}:{c.start_line}"
+                if c.start_line != c.end_line:
+                    context = f"{c.file}:{c.start_line}-{c.end_line}"
+
+                self.push_screen(
+                    CommentInputDialog(context=context, initial_text=c.comment_text),
+                    lambda text, idx=i: self._on_edit_submitted(text, idx),
+                )
+                return
+
+    def _on_edit_submitted(self, text: str | None, idx: int) -> None:
+        if text is None:
+            return
+        self._comments[idx] = ReviewComment(
+            file=self._comments[idx].file,
+            start_line=self._comments[idx].start_line,
+            end_line=self._comments[idx].end_line,
+            comment_text=text,
+        )
+        self._refresh_comments()
+
     def on_diff_view_navigate_comment(self, event: DiffView.NavigateComment) -> None:
         if not self._diff.files or not self._comments:
             return
@@ -232,26 +266,30 @@ class DiffApp(App[None]):
             for c in file_comments:
                 if c.start_line > cursor:
                     diff_view._cursor_pos = c.start_line
-                    diff_view._render_diff()
+                    diff_view._line_cache.clear()
+                    diff_view.refresh()
                     diff_view._scroll_to_cursor()
                     self._update_status()
                     return
             # Wrap around
             diff_view._cursor_pos = file_comments[0].start_line
-            diff_view._render_diff()
+            diff_view._line_cache.clear()
+            diff_view.refresh()
             diff_view._scroll_to_cursor()
         else:
             # Find prev comment before cursor
             for c in reversed(file_comments):
                 if c.start_line < cursor:
                     diff_view._cursor_pos = c.start_line
-                    diff_view._render_diff()
+                    diff_view._line_cache.clear()
+                    diff_view.refresh()
                     diff_view._scroll_to_cursor()
                     self._update_status()
                     return
             # Wrap around
             diff_view._cursor_pos = file_comments[-1].start_line
-            diff_view._render_diff()
+            diff_view._line_cache.clear()
+            diff_view.refresh()
             diff_view._scroll_to_cursor()
 
         self._update_status()
@@ -326,27 +364,18 @@ class DiffApp(App[None]):
         copy_to_clipboard(md)
         self.notify(f"Copied {len(self._comments)} comments to clipboard")
 
-    def action_submit_claude(self) -> None:
+    def action_clear_comments(self) -> None:
         if not self._comments:
-            self.notify("No comments to submit", severity="warning")
+            self.notify("No comments to clear", severity="warning")
             return
-
-        from womtrees.review import copy_to_clipboard, format_comments, send_to_claude
-
-        md = format_comments(self._comments)
-        copy_to_clipboard(md)
-        self.notify(f"Copied {len(self._comments)} comments to clipboard")
-
-        if self._tmux_pane:
-            send_to_claude(self._tmux_pane, md)
-            self.notify("Sent to Claude")
-            self.exit()
-        else:
-            self.notify("No active Claude session — clipboard only", severity="warning")
+        count = len(self._comments)
+        self._comments.clear()
+        self._refresh_comments()
+        self.notify(f"Cleared {count} comments")
 
     def action_help(self) -> None:
         self.notify(
             "j/k: navigate | ctrl+j/k: files | ]/[: hunks | m: cycle mode | "
-            "v: select | c: comment | u: undo | x: delete | "
-            "n/N: nav comments | ctrl+s: submit | S: submit+Claude | q: quit"
+            "v: select | c: comment | e: edit | u: undo | x: delete | "
+            "n/N: nav comments | ctrl+c: copy | ctrl+x: clear | q: quit"
         )

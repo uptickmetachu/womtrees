@@ -52,9 +52,12 @@ class CommentInputDialog(ModalScreen[str | None]):
     }
     """
 
-    def __init__(self, context: str = "", **kwargs: Any) -> None:
+    def __init__(
+        self, context: str = "", initial_text: str = "", **kwargs: Any
+    ) -> None:
         super().__init__(**kwargs)
         self._comment_context = context
+        self._initial_text = initial_text
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -67,7 +70,10 @@ class CommentInputDialog(ModalScreen[str | None]):
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
-        self.query_one("#comment-input", TextArea).focus()
+        ta = self.query_one("#comment-input", TextArea)
+        if self._initial_text:
+            ta.load_text(self._initial_text)
+        ta.focus()
 
     def action_submit(self) -> None:
         text = self.query_one("#comment-input", TextArea).text.strip()
