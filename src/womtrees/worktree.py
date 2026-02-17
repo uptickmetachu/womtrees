@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tomllib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -174,14 +174,14 @@ def _run_scripts(
     On success, the log is deleted. On failure, the log is preserved.
     """
     sanitized = sanitize_branch_name(branch)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
     log_path = Path(f"/tmp/womtrees-{action}-{sanitized}-{timestamp}.log")
 
     env = os.environ.copy()
     env["ROOT_WORKTREE_PATH"] = repo_path
 
     with open(log_path, "w") as log:
-        log.write(f"[womtrees {action}] {datetime.now().isoformat()}\n")
+        log.write(f"[womtrees {action}] {datetime.now(tz=timezone.utc).isoformat()}\n")
         log.write(f"worktree: {worktree_path}\n")
         log.write(f"repo: {repo_path}\n\n")
 
