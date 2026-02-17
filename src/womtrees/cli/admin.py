@@ -32,6 +32,36 @@ def sqlite_cmd() -> None:
     subprocess.run(["sqlite3", str(db_path)])
 
 
+@click.group("self")
+def self_cmd() -> None:
+    """Manage the womtrees installation itself."""
+
+
+@self_cmd.command("update")
+def self_update() -> None:
+    """Update womtrees to the latest version via uv tool upgrade."""
+    package = "womtrees"
+    click.echo(f"Updating {package}...")
+    result = subprocess.run(
+        ["uv", "tool", "upgrade", package],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        click.echo(result.stdout.strip() or "Already up to date.")
+    else:
+        # uv tool upgrade fails if not installed via uv tool — hint the user
+        click.echo(f"Update failed (exit {result.returncode}):", err=True)
+        if result.stderr:
+            click.echo(result.stderr.strip(), err=True)
+        click.echo(
+            "Hint: self update requires womtrees to be installed via "
+            "'uv tool install'.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+
 @click.command()
 @click.option("--edit", is_flag=True, help="Open config in $EDITOR.")
 def config(edit: bool) -> None:

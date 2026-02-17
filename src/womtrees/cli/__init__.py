@@ -8,7 +8,7 @@ import click
 # hijack tracebacks with fancy formatting that breaks CI and log parsing.
 sys.excepthook = sys.__excepthook__
 
-from womtrees.cli.admin import board, config, sqlite_cmd  # noqa: E402
+from womtrees.cli.admin import board, config, self_cmd, sqlite_cmd  # noqa: E402
 from womtrees.cli.hooks import hook  # noqa: E402
 from womtrees.cli.info import (  # noqa: E402
     _maybe_resume_claude,
@@ -65,6 +65,7 @@ cli.add_command(popup)
 cli.add_command(board)
 cli.add_command(sqlite_cmd)
 cli.add_command(config)
+cli.add_command(self_cmd)
 
 # Register review command
 cli.add_command(review_diff_cmd)
