@@ -18,7 +18,7 @@ _BG_REMOVED = "#2d0f0f"
 _BG_HUNK = "#1c1c1c"
 _BG_SELECTION = "#3a3a3a"
 _BG_COMMENT = "#2a2210"
-_BG_CURSOR = "#262626"
+_BG_CURSOR = "#444444"
 
 # Gutter styling
 _GUTTER_STYLE = "dim"
@@ -180,11 +180,17 @@ class DiffView(RichLog):
         if idx in commented_lines and bg != _BG_SELECTION:
             bg = _BG_COMMENT
 
-        # Cursor line highlight
+        # Cursor line highlight — pad to full width so background fills the row
         if idx == self._cursor_pos:
             bg = bg or _BG_CURSOR
-            text.stylize(f"on {bg} bold")
+            pad = max(0, self.size.width - text.cell_len)
+            if pad:
+                text.append(" " * pad)
+            text.stylize(f"on {bg} bold underline")
         elif bg:
+            pad = max(0, self.size.width - text.cell_len)
+            if pad:
+                text.append(" " * pad)
             text.stylize(f"on {bg}")
 
         return text
