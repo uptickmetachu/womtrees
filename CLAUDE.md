@@ -22,7 +22,7 @@ uv run mypy src/         # Type check
 ```
 
 ## Rules
-- Keep CLI imports lean — never import Textual at module level; lazy-import only in `wt board`
+- Keep CLI imports lean — use lazy imports in `src/womtrees/cli` so that we don't import textual/claude/pydantic
 - No ORM — plain SQLite queries in `db.py`
 - All subprocess calls (git, tmux) go through dedicated wrapper modules (`worktree.py`, `tmux.py`)
 - Design docs in `docs/plans/` — implement in phase order (1→2→3→4)
