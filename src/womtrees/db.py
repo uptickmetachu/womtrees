@@ -307,6 +307,7 @@ def update_work_item(
 
 
 def delete_work_item(conn: sqlite3.Connection, item_id: int) -> bool:
+    conn.execute("DELETE FROM pull_requests WHERE work_item_id = ?", (item_id,))
     conn.execute("DELETE FROM claude_sessions WHERE work_item_id = ?", (item_id,))
     cursor = conn.execute("DELETE FROM work_items WHERE id = ?", (item_id,))
     conn.commit()

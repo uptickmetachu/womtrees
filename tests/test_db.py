@@ -6,6 +6,7 @@ import pytest
 
 from womtrees.db import (
     _ensure_schema,
+    create_pull_request,
     create_work_item,
     delete_work_item,
     get_connection,
@@ -100,6 +101,15 @@ def test_update():
 def test_delete():
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
+
+    assert delete_work_item(conn, item.id) is True
+    assert get_work_item(conn, item.id) is None
+
+
+def test_delete_with_pull_request():
+    conn = _in_memory_conn()
+    item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-pr")
+    create_pull_request(conn, item.id, number=42, owner="me", repo="repo1")
 
     assert delete_work_item(conn, item.id) is True
     assert get_work_item(conn, item.id) is None
