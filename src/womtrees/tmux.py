@@ -103,6 +103,11 @@ def rename_window(target: str, name: str) -> None:
     _run(["tmux", "rename-window", "-t", target, name])
 
 
+def select_window(target: str) -> None:
+    """Select a tmux window. target is 'session:window' or a pane id like '%0'."""
+    _run(["tmux", "select-window", "-t", target])
+
+
 def swap_pane(session: str) -> None:
     """Swap the current pane with the previous one (used to put Claude on left/top)."""
     _run(["tmux", "swap-pane", "-t", session, "-U"])

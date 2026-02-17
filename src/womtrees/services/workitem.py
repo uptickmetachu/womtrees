@@ -183,7 +183,8 @@ def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> W
         for win_idx, window in enumerate(layout.windows):
             if win_idx == 0:
                 # First window already exists; rename it
-                tmux.rename_window(f"{session_name}:0", window.name)
+                # Target via pane ID — respects user's base-index setting
+                tmux.rename_window(first_pane_id, window.name)
                 current_pane_id = first_pane_id
             else:
                 current_pane_id = tmux.new_window(
@@ -209,6 +210,10 @@ def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> W
                     tmux.send_keys(pane_id, pane_cfg.command)
 
         assert claude_pane_id is not None  # guaranteed by layout validation
+
+        # Select the first window so it's active on attach
+        if len(layout.windows) > 1:
+            tmux.select_window(first_pane_id)
 
         # Create a ClaudeSession record
         create_claude_session(

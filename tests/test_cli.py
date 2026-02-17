@@ -1047,6 +1047,7 @@ def test_start_multi_window_layout(runner, db_conn, tmp_path) -> None:
         patch("womtrees.tmux.new_window", return_value="%2") as mock_new_win,
         patch("womtrees.tmux.split_pane", side_effect=["%1", "%3"]) as mock_split,
         patch("womtrees.tmux.select_layout") as mock_sel_layout,
+        patch("womtrees.tmux.select_window") as mock_sel_win,
         patch("womtrees.tmux.send_keys") as mock_send_keys,
     ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
@@ -1054,7 +1055,10 @@ def test_start_multi_window_layout(runner, db_conn, tmp_path) -> None:
         assert result.exit_code == 0
 
         # First window renamed
-        mock_rename_win.assert_called_once_with("myrepo/feat-x:0", "code")
+        mock_rename_win.assert_called_once_with("%0", "code")
+
+        # First window selected after loop (so it's active on attach)
+        mock_sel_win.assert_called_once_with("%0")
 
         # Second window created
         mock_new_win.assert_called_once_with(
