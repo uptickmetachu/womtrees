@@ -53,7 +53,7 @@ uv run mypy src/         # Type check
 - `config.py` — TOML config loading with typed `Config` dataclass
 - `tui/app.py` — Textual `WomtreesApp` with kanban board, vim-style navigation, dialog callbacks
 - `tui/diff_app.py` — Standalone Textual app for the diff viewer (two-panel: file tree + diff view). Manages comments, submission to clipboard/Claude.
-- `tui/diff_view.py` — Custom `RichLog` widget for rendering diffs with vim navigation, visual selection, and comment markers.
+- `tui/diff_view.py` — Custom `ScrollView` widget with virtual scrolling (`render_line()`) for rendering diffs with vim navigation, visual selection, and comment markers.
 - `tui/comment_input.py` — Modal dialog for entering review comments on selected diff lines.
 - `tui/dialogs/` — Modal dialogs split into individual files: `create.py`, `edit.py`, `delete.py`, `merge.py`, `rebase.py`, `auto_rebase.py`, `claude_stream.py`, `help.py`. Re-exported from `tui/dialogs/__init__.py`.
 
@@ -69,6 +69,8 @@ uv run mypy src/         # Type check
 - Focus save/restore is unnecessary — cards stay in DOM so focus is preserved automatically.
 
 **TUI dialog key bindings:** `ctrl+s` is the universal submit/confirm shortcut across all dialogs. Use `Binding("ctrl+s", ..., priority=True)` — priority bindings fire before focused widgets consume the event. Note: `ctrl+enter` is not a valid terminal key (terminals send it as plain `enter`/`ctrl+m`). Button labels include the shortcut hint, e.g. `"Submit (ctrl+s)"`.
+
+**Textual key binding names:** Do NOT use `shift+<letter>` — it doesn't work reliably. Use the uppercase letter directly (e.g. `"G"` not `"shift+g"`, `"N"` not `"shift+n"`). For symbols, use the raw character or specific key name, not verbal names: `"]"` or `"right_square_bracket"` (not `"bracketright"`), `"["` or `"left_square_bracket"` (not `"bracketleft"`), `"}"` or `"right_curly_bracket"`, `"{"` or `"left_curly_bracket"`. Comma-separate multiple names for the same binding to cover variants: `Binding("right_square_bracket,]", ...)`.
 
 **State machines:**
 
