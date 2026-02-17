@@ -20,7 +20,7 @@ def review_diff_cmd(
     """
     import os
 
-    from womtrees.diff import compute_diff
+    from womtrees.diff import list_diff_files
 
     tmux_pane: str | None = None
 
@@ -40,7 +40,7 @@ def review_diff_cmd(
 
     assert repo_path is not None
 
-    diff_result = compute_diff(
+    diff_result = list_diff_files(
         repo_path,
         base_ref=base_ref,
         uncommitted=uncommitted,

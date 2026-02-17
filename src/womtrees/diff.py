@@ -268,6 +268,43 @@ def compute_diff_for_file(
     return DiffFile(path=file_path, language=language, lines=diff_lines)
 
 
+def list_diff_files(
+    repo_path: str,
+    base_ref: str | None = None,
+    target_ref: str | None = None,
+    *,
+    uncommitted: bool = False,
+) -> DiffResult:
+    """List changed files without computing full diffs.
+
+    Returns a DiffResult with stub DiffFile objects (path only, no lines).
+    Use compute_diff_for_file() to lazily load the full diff for a file.
+    """
+    from womtrees.worktree import get_default_branch
+
+    if base_ref is None:
+        base_ref = get_default_branch(repo_path)
+    if target_ref is None:
+        target_ref = "HEAD"
+
+    if uncommitted:
+        files = list_uncommitted_files(repo_path)
+        label_target = "working tree"
+        actual_base = "HEAD"
+    else:
+        files = list_changed_files(repo_path, base_ref, target_ref)
+        label_target = target_ref
+        actual_base = base_ref
+
+    diff_files = [DiffFile(path=f, language=_detect_language(f)) for f in files]
+
+    return DiffResult(
+        files=diff_files,
+        base_ref=actual_base,
+        target_ref=label_target,
+    )
+
+
 def compute_diff(
     repo_path: str,
     base_ref: str | None = None,

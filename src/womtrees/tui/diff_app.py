@@ -10,7 +10,7 @@ from textual.containers import Horizontal
 from textual.events import Key
 from textual.widgets import Footer, Header, Static, Tree
 
-from womtrees.diff import DiffResult, ReviewComment
+from womtrees.diff import DiffResult, ReviewComment, compute_diff_for_file
 from womtrees.tui.diff_view import DiffView
 
 
@@ -110,13 +110,22 @@ class DiffApp(App[None]):
     def _load_file(self, idx: int) -> None:
         if 0 <= idx < len(self._diff.files):
             self._current_file_idx = idx
+            df = self._diff.files[idx]
+            # Lazy load: compute full diff on first access
+            if not df.lines:
+                full = compute_diff_for_file(
+                    self._repo_path,
+                    df.path,
+                    self._diff.base_ref,
+                    "HEAD",
+                    uncommitted=self._uncommitted_mode,
+                )
+                df.lines = full.lines
             diff_view = self.query_one("#diff-view", DiffView)
-            diff_view.load_file(self._diff.files[idx])
-            file_comments = [
-                c for c in self._comments if c.file == self._diff.files[idx].path
-            ]
+            diff_view.load_file(df)
+            file_comments = [c for c in self._comments if c.file == df.path]
             diff_view.set_comments(file_comments)
-            self.title = self._diff.files[idx].path
+            self.title = df.path
             self._update_status()
 
     def _update_status(self) -> None:
@@ -337,11 +346,11 @@ class DiffApp(App[None]):
 
     def action_cycle_mode(self) -> None:
         """Toggle between uncommitted changes and branch diff."""
-        from womtrees.diff import compute_diff
+        from womtrees.diff import list_diff_files
 
         self._uncommitted_mode = not self._uncommitted_mode
 
-        self._diff = compute_diff(
+        self._diff = list_diff_files(
             self._repo_path,
             base_ref=self._base_ref,
             uncommitted=self._uncommitted_mode,
