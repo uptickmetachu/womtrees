@@ -268,7 +268,8 @@ def cycle(filter: str) -> None:  # noqa: A002
             ]
 
     if not items:
-        raise click.ClickException(f"No active tmux sessions matching '{filter}'.")
+        click.echo(f"No active tmux sessions matching '{filter}'.")
+        return
 
     # Determine current tmux session (if inside tmux)
     import os
