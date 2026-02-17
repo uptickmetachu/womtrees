@@ -7,28 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from womtrees.cli import cli
-from womtrees.config import LayoutConfig, PaneConfig, WindowConfig
 from womtrees.db import _ensure_schema
-
-STANDARD_LAYOUT = LayoutConfig(
-    windows=[
-        WindowConfig(
-            name="main",
-            layout="even-horizontal",
-            panes=[PaneConfig(claude=True), PaneConfig()],
-        )
-    ]
-)
-
-STANDARD_LAYOUT_RIGHT = LayoutConfig(
-    windows=[
-        WindowConfig(
-            name="main",
-            layout="even-horizontal",
-            panes=[PaneConfig(), PaneConfig(claude=True)],
-        )
-    ]
-)
 
 
 @pytest.fixture
@@ -230,10 +209,6 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -246,19 +221,14 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path) -> None:
             "womtrees.services.workitem.create_worktree",
             return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
         ),
-        patch(
-            "womtrees.services.workitem.load_womtrees_config",
-            return_value=None,
-        ),
         patch("womtrees.tmux.is_available", return_value=True),
         patch(
             "womtrees.tmux.create_session",
             return_value=("myrepo/feat-x", "%0"),
         ) as mock_create,
         patch("womtrees.tmux.set_environment") as mock_setenv,
-        patch("womtrees.tmux.rename_window"),
         patch("womtrees.tmux.split_pane", return_value="%1") as mock_split,
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane") as mock_swap,
         patch("womtrees.tmux.send_keys"),
     ):
         runner.invoke(cli, ["todo", "test prompt", "-b", "feat/x"])
@@ -278,20 +248,17 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path) -> None:
             "WOMTREE_BRANCH": "feat/x",
         }
         mock_split.assert_called_once()
+        mock_swap.assert_called_once()  # claude_pane=left triggers swap
 
 
-def test_start_claude_pane_position(runner, db_conn, tmp_path) -> None:
-    """Test that claude pane position matches layout config (right = shell first)."""
+def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path) -> None:
+    """Test that swap_pane is NOT called when claude_pane is 'right'."""
     get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "right"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT_RIGHT}
-    mock_config.default_layout = "standard"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT_RIGHT}
-    mock_config.default_layout = "standard"
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -304,25 +271,17 @@ def test_start_claude_pane_position(runner, db_conn, tmp_path) -> None:
             "womtrees.services.workitem.create_worktree",
             return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
         ),
-        patch(
-            "womtrees.services.workitem.load_womtrees_config",
-            return_value=None,
-        ),
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.tmux.rename_window"),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.select_layout"),
-        patch("womtrees.tmux.send_keys") as mock_send_keys,
+        patch("womtrees.tmux.swap_pane") as mock_swap,
+        patch("womtrees.tmux.send_keys"),
     ):
         runner.invoke(cli, ["todo", "-b", "feat/x"])
         result = runner.invoke(cli, ["start", "1"])
         assert result.exit_code == 0
-        # Claude should be sent to second pane (%1), not first (%0)
-        claude_calls = [c for c in mock_send_keys.call_args_list if "claude" in c[0][1]]
-        assert len(claude_calls) == 1
-        assert claude_calls[0][0][0] == "%1"
+        mock_swap.assert_not_called()
 
 
 def test_start_fails_without_tmux(runner, db_conn) -> None:
@@ -354,8 +313,6 @@ def test_delete_kills_tmux_session(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -372,10 +329,8 @@ def test_delete_kills_tmux_session(runner, db_conn, tmp_path) -> None:
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane"),
         patch("womtrees.tmux.send_keys"),
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.tmux.kill_session") as mock_kill,
@@ -397,8 +352,6 @@ def test_attach_command(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -414,10 +367,8 @@ def test_attach_command(runner, db_conn, tmp_path) -> None:
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane"),
         patch("womtrees.tmux.send_keys"),
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.tmux.attach") as mock_attach,
@@ -499,8 +450,6 @@ def test_attach_resumes_dead_session(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
     mock_config.claude_args = ""
 
     with (
@@ -518,10 +467,8 @@ def test_attach_resumes_dead_session(runner, db_conn, tmp_path) -> None:
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane"),
         patch("womtrees.tmux.send_keys") as mock_send_keys,
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.tmux.attach"),
@@ -561,8 +508,6 @@ def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path) -> Non
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
     mock_config.claude_args = ""
 
     with (
@@ -580,10 +525,8 @@ def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path) -> Non
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane"),
         patch("womtrees.tmux.send_keys") as mock_send_keys,
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.tmux.attach"),
@@ -618,8 +561,6 @@ def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
     mock_config.claude_args = ""
 
     with (
@@ -636,10 +577,8 @@ def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path) -> None:
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane"),
         patch("womtrees.tmux.send_keys") as mock_send_keys,
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.tmux.attach"),
@@ -667,8 +606,6 @@ def test_attach_skips_resume_if_another_session_alive(
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "left"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
     mock_config.claude_args = ""
 
     def pid_alive(pid):
@@ -690,10 +627,8 @@ def test_attach_skips_resume_if_another_session_alive(
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo-feat-x", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
+        patch("womtrees.tmux.swap_pane"),
         patch("womtrees.tmux.send_keys") as mock_send_keys,
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.tmux.attach"),
@@ -834,8 +769,6 @@ def test_edit_branch_active_item(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "right"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT_RIGHT}
-    mock_config.default_layout = "standard"
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -851,10 +784,7 @@ def test_edit_branch_active_item(runner, db_conn, tmp_path) -> None:
         patch("womtrees.tmux.is_available", return_value=True),
         patch("womtrees.tmux.create_session", return_value=("myrepo/feat-old", "%0")),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
         patch("womtrees.tmux.send_keys"),
         patch("womtrees.tmux.session_exists", return_value=True),
         patch("womtrees.services.workitem.rename_branch") as mock_rename,
@@ -955,8 +885,6 @@ def test_create_with_repo_option(runner, db_conn, tmp_path) -> None:
     mock_config.base_dir = tmp_path / "worktrees"
     mock_config.tmux_split = "vertical"
     mock_config.tmux_claude_pane = "right"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT_RIGHT}
-    mock_config.default_layout = "standard"
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -975,10 +903,7 @@ def test_create_with_repo_option(runner, db_conn, tmp_path) -> None:
             return_value=("another-project/feat-z", "%0"),
         ),
         patch("womtrees.tmux.set_environment"),
-        patch("womtrees.services.workitem.load_womtrees_config", return_value=None),
         patch("womtrees.tmux.split_pane", return_value="%1"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.select_layout"),
         patch("womtrees.tmux.send_keys"),
     ):
         result = runner.invoke(cli, ["create", "-b", "feat/z", "-r", str(target_repo)])
@@ -990,211 +915,6 @@ def test_create_with_repo_option(runner, db_conn, tmp_path) -> None:
         item = get_work_item(conn, 1)
         assert item.repo_name == "another-project"
         assert item.repo_path == str(target_repo)
-
-
-# -- Layout tests --
-
-
-def test_start_multi_window_layout(runner, db_conn, tmp_path) -> None:
-    """Test start_work_item with a multi-window layout."""
-    get_conn_fn, _db_path = db_conn
-
-    multi_layout = LayoutConfig(
-        windows=[
-            WindowConfig(
-                name="code",
-                layout="even-horizontal",
-                panes=[PaneConfig(claude=True), PaneConfig()],
-            ),
-            WindowConfig(
-                name="services",
-                layout="even-vertical",
-                panes=[
-                    PaneConfig(command="npm run dev"),
-                    PaneConfig(command="npm run test"),
-                ],
-            ),
-        ]
-    )
-
-    mock_config = MagicMock()
-    mock_config.base_dir = tmp_path / "worktrees"
-    mock_config.layouts = {"dev-server": multi_layout}
-    mock_config.default_layout = "dev-server"
-
-    with (
-        patch("womtrees.db.get_connection", get_conn_fn),
-        patch(
-            "womtrees.cli.utils.get_current_repo",
-            return_value=("myrepo", "/tmp/myrepo"),
-        ),
-        patch("womtrees.cli.items.get_config", return_value=mock_config),
-        patch(
-            "womtrees.services.workitem.create_worktree",
-            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
-        ),
-        patch(
-            "womtrees.services.workitem.load_womtrees_config",
-            return_value=None,
-        ),
-        patch("womtrees.tmux.is_available", return_value=True),
-        patch(
-            "womtrees.tmux.create_session",
-            return_value=("myrepo/feat-x", "%0"),
-        ),
-        patch("womtrees.tmux.set_environment"),
-        patch("womtrees.tmux.rename_window") as mock_rename_win,
-        patch("womtrees.tmux.new_window", return_value="%2") as mock_new_win,
-        patch("womtrees.tmux.split_pane", side_effect=["%1", "%3"]) as mock_split,
-        patch("womtrees.tmux.select_layout") as mock_sel_layout,
-        patch("womtrees.tmux.send_keys") as mock_send_keys,
-    ):
-        runner.invoke(cli, ["todo", "-b", "feat/x"])
-        result = runner.invoke(cli, ["start", "1"])
-        assert result.exit_code == 0
-
-        # First window renamed
-        mock_rename_win.assert_called_once_with("myrepo/feat-x:0", "code")
-
-        # Second window created
-        mock_new_win.assert_called_once_with(
-            "myrepo/feat-x",
-            "services",
-            str(tmp_path / "worktrees" / "myrepo" / "feat-x"),
-        )
-
-        # Two split_pane calls (one per window for second pane)
-        assert mock_split.call_count == 2
-
-        # select_layout called for both windows
-        assert mock_sel_layout.call_count == 2
-        mock_sel_layout.assert_any_call("myrepo/feat-x:code", "even-horizontal")
-        mock_sel_layout.assert_any_call("myrepo/feat-x:services", "even-vertical")
-
-        # Commands sent: claude to %0, npm run dev to %2, npm run test to %3
-        send_calls = {c[0][0]: c[0][1] for c in mock_send_keys.call_args_list}
-        assert "claude" in send_calls["%0"]
-        assert send_calls["%2"] == "npm run dev"
-        assert send_calls["%3"] == "npm run test"
-
-
-def test_start_womtrees_toml_layout_override(runner, db_conn, tmp_path) -> None:
-    """Test .womtrees.toml layout override."""
-    get_conn_fn, _db_path = db_conn
-
-    three_pane = LayoutConfig(
-        windows=[
-            WindowConfig(
-                name="main",
-                layout="main-vertical",
-                panes=[
-                    PaneConfig(claude=True),
-                    PaneConfig(),
-                    PaneConfig(command="tail -f log"),
-                ],
-            )
-        ]
-    )
-
-    mock_config = MagicMock()
-    mock_config.base_dir = tmp_path / "worktrees"
-    mock_config.layouts = {
-        "standard": STANDARD_LAYOUT,
-        "three-pane": three_pane,
-    }
-    mock_config.default_layout = "standard"
-
-    with (
-        patch("womtrees.db.get_connection", get_conn_fn),
-        patch(
-            "womtrees.cli.utils.get_current_repo",
-            return_value=("myrepo", "/tmp/myrepo"),
-        ),
-        patch("womtrees.cli.items.get_config", return_value=mock_config),
-        patch(
-            "womtrees.services.workitem.create_worktree",
-            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
-        ),
-        patch(
-            "womtrees.services.workitem.load_womtrees_config",
-            return_value={"layout": "three-pane"},
-        ),
-        patch("womtrees.tmux.is_available", return_value=True),
-        patch(
-            "womtrees.tmux.create_session",
-            return_value=("myrepo/feat-x", "%0"),
-        ),
-        patch("womtrees.tmux.set_environment"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.split_pane", side_effect=["%1", "%2"]) as mock_split,
-        patch("womtrees.tmux.select_layout") as mock_sel_layout,
-        patch("womtrees.tmux.send_keys") as mock_send_keys,
-    ):
-        runner.invoke(cli, ["todo", "-b", "feat/x"])
-        result = runner.invoke(cli, ["start", "1"])
-        assert result.exit_code == 0
-
-        # Two extra panes created (3 total, first comes free)
-        assert mock_split.call_count == 2
-
-        # Layout applied
-        mock_sel_layout.assert_called_once_with("myrepo/feat-x:main", "main-vertical")
-
-        # Commands: claude to %0, tail to %2
-        send_calls = {c[0][0]: c[0][1] for c in mock_send_keys.call_args_list}
-        assert "claude" in send_calls["%0"]
-        assert send_calls["%2"] == "tail -f log"
-
-
-def test_start_fallback_to_standard_layout(runner, db_conn, tmp_path) -> None:
-    """Test that missing .womtrees.toml falls back to standard layout."""
-    get_conn_fn, _db_path = db_conn
-
-    mock_config = MagicMock()
-    mock_config.base_dir = tmp_path / "worktrees"
-    mock_config.layouts = {"standard": STANDARD_LAYOUT}
-    mock_config.default_layout = "standard"
-
-    with (
-        patch("womtrees.db.get_connection", get_conn_fn),
-        patch(
-            "womtrees.cli.utils.get_current_repo",
-            return_value=("myrepo", "/tmp/myrepo"),
-        ),
-        patch("womtrees.cli.items.get_config", return_value=mock_config),
-        patch(
-            "womtrees.services.workitem.create_worktree",
-            return_value=tmp_path / "worktrees" / "myrepo" / "feat-x",
-        ),
-        patch(
-            "womtrees.services.workitem.load_womtrees_config",
-            return_value=None,
-        ),
-        patch("womtrees.tmux.is_available", return_value=True),
-        patch(
-            "womtrees.tmux.create_session",
-            return_value=("myrepo/feat-x", "%0"),
-        ),
-        patch("womtrees.tmux.set_environment"),
-        patch("womtrees.tmux.rename_window"),
-        patch("womtrees.tmux.split_pane", return_value="%1") as mock_split,
-        patch("womtrees.tmux.select_layout") as mock_sel_layout,
-        patch("womtrees.tmux.send_keys") as mock_send_keys,
-    ):
-        runner.invoke(cli, ["todo", "-b", "feat/x"])
-        result = runner.invoke(cli, ["start", "1"])
-        assert result.exit_code == 0
-
-        # Standard layout: one split (2 panes)
-        mock_split.assert_called_once()
-
-        # Layout applied
-        mock_sel_layout.assert_called_once_with("myrepo/feat-x:main", "even-horizontal")
-
-        # Claude sent to first pane
-        claude_calls = [c for c in mock_send_keys.call_args_list if "claude" in c[0][1]]
-        assert len(claude_calls) == 1
-        assert claude_calls[0][0][0] == "%0"
 
 
 def test_cd_tree_default(runner, tmp_path) -> None:

@@ -73,36 +73,6 @@ def split_pane(session: str, direction: str, working_dir: str) -> str:
     return result.stdout.strip()
 
 
-def new_window(session: str, name: str, working_dir: str) -> str:
-    """Create a new window in an existing session. Returns the initial pane_id."""
-    result = _run(
-        [
-            "tmux",
-            "new-window",
-            "-t",
-            session,
-            "-n",
-            name,
-            "-c",
-            working_dir,
-            "-P",
-            "-F",
-            "#{pane_id}",
-        ],
-    )
-    return result.stdout.strip()
-
-
-def select_layout(target: str, layout: str) -> None:
-    """Apply a tmux layout to a window. target is 'session:window'."""
-    _run(["tmux", "select-layout", "-t", target, layout])
-
-
-def rename_window(target: str, name: str) -> None:
-    """Rename a tmux window. target is 'session:window_index'."""
-    _run(["tmux", "rename-window", "-t", target, name])
-
-
 def swap_pane(session: str) -> None:
     """Swap the current pane with the previous one (used to put Claude on left/top)."""
     _run(["tmux", "swap-pane", "-t", session, "-U"])
