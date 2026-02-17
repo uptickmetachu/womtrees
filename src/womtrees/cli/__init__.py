@@ -30,6 +30,7 @@ from womtrees.cli.items import (  # noqa: E402
     todo,
 )
 from womtrees.cli.popups import popup  # noqa: E402
+from womtrees.cli.review_diff import review_diff_cmd  # noqa: E402
 
 
 @click.group()
@@ -64,6 +65,9 @@ cli.add_command(popup)
 cli.add_command(board)
 cli.add_command(sqlite_cmd)
 cli.add_command(config)
+
+# Register review command
+cli.add_command(review_diff_cmd)
 
 # Re-export for backward compatibility (used by TUI)
 __all__ = ["_maybe_resume_claude", "_restore_tmux_session", "cli"]

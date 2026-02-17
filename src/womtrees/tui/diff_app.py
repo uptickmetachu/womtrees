@@ -1,0 +1,566 @@
+"""Standalone Textual app for the diff viewer."""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal
+from textual.events import Key
+from textual.widgets import Footer, Header, Static, Tree
+
+from womtrees.diff import DiffFile, DiffResult, ReviewComment, compute_diff_for_file
+from womtrees.tui.diff_view import DiffView
+
+
+class DiffApp(App[None]):
+    """Two-panel diff viewer: file tree + unified diff."""
+
+    TITLE = "review-diff"
+
+    CSS = """
+    #diff-layout {
+        height: 1fr;
+    }
+
+    #file-tree {
+        width: 25;
+        border-right: solid $accent;
+    }
+
+    #diff-view {
+        width: 1fr;
+    }
+
+    #diff-status {
+        dock: bottom;
+        height: 1;
+        padding: 0 1;
+        background: $boost;
+        color: $text-muted;
+    }
+    """
+
+    BINDINGS = [
+        Binding("q", "quit", "Quit", show=True),
+        Binding("question_mark", "help", "Help", show=True),
+        Binding("tab", "toggle_focus", "Toggle focus", show=False),
+        Binding("ctrl+j", "next_file", "Next file", show=False, priority=True),
+        Binding("ctrl+k", "prev_file", "Prev file", show=False, priority=True),
+        Binding(
+            "ctrl+c", "submit_clipboard", "Copy comments", show=True, priority=True
+        ),
+        Binding("ctrl+x", "clear_comments", "Clear comments", show=True, priority=True),
+        Binding("m", "cycle_mode", "Cycle mode", show=True),
+    ]
+
+    def __init__(
+        self,
+        diff_result: DiffResult,
+        repo_path: str,
+        base_ref: str | None = None,
+        tmux_pane: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._diff = diff_result
+        self._repo_path = repo_path
+        self._base_ref = base_ref
+        self._tmux_pane = tmux_pane
+        self._comments: list[ReviewComment] = []
+        self._current_file_idx: int = 0
+        self._uncommitted_mode: bool = diff_result.target_ref == "working tree"
+        self._poll_snapshot: tuple[str, tuple[tuple[str, float], ...]] = ("", ())
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Horizontal(id="diff-layout"):
+            yield Tree("Files", id="file-tree")
+            yield DiffView(id="diff-view")
+        yield Static("", id="diff-status")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        tree = self.query_one("#file-tree", Tree)
+        for i, df in enumerate(self._diff.files):
+            tree.root.add_leaf(df.path, data=str(i))
+        tree.root.expand()
+
+        if self._diff.files:
+            self._load_file(0)
+
+        self.query_one("#diff-view", DiffView).focus()
+        self._update_status()
+        self._poll_snapshot = self._take_snapshot()
+        self.set_interval(5, self._poll_for_changes)
+
+    def on_key(self, event: Key) -> None:
+        """Map j/k to tree navigation when tree is focused."""
+        tree = self.query_one("#file-tree", Tree)
+        if self.focused is tree or (self.focused and tree in self.focused.ancestors):
+            if event.key == "j":
+                tree.action_cursor_down()
+                event.prevent_default()
+            elif event.key == "k":
+                tree.action_cursor_up()
+                event.prevent_default()
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
+        if event.node.data is not None:
+            idx = int(event.node.data)
+            self._load_file(idx)
+
+    def _load_file(self, idx: int) -> None:
+        if 0 <= idx < len(self._diff.files):
+            self._current_file_idx = idx
+            df = self._diff.files[idx]
+            # Lazy load: compute full diff on first access
+            # Both modes diff against working tree (different base refs)
+            if not df.lines:
+                full = compute_diff_for_file(
+                    self._repo_path,
+                    df.path,
+                    self._diff.base_ref,
+                    "HEAD",
+                    uncommitted=True,
+                )
+                df.lines = full.lines
+            diff_view = self.query_one("#diff-view", DiffView)
+            diff_view.load_file(df)
+            file_comments = [c for c in self._comments if c.file == df.path]
+            diff_view.set_comments(file_comments)
+            self.title = df.path
+            self._update_status()
+
+    def _update_status(self) -> None:
+        if not self._diff.files:
+            status_text = "No files changed"
+        else:
+            f = self._diff.files[self._current_file_idx]
+            diff_view = self.query_one("#diff-view", DiffView)
+            pos = diff_view.cursor + 1
+            total = len(f.lines)
+            status_text = (
+                f"{len(self._diff.files)} files changed | "
+                f"{len(self._comments)} comments | "
+                f"{f.path}:{pos}/{total} | "
+                f"{self._diff.base_ref}..{self._diff.target_ref}"
+            )
+        self.query_one("#diff-status", Static).update(status_text)
+
+    def _sync_tree_highlight(self, idx: int) -> None:
+        """Move the file tree highlight to match the current file index."""
+        tree = self.query_one("#file-tree", Tree)
+        children = list(tree.root.children)
+        if 0 <= idx < len(children):
+            tree.move_cursor(children[idx])
+
+    # -- File navigation --
+
+    def action_next_file(self) -> None:
+        if self._current_file_idx < len(self._diff.files) - 1:
+            idx = self._current_file_idx + 1
+            self._load_file(idx)
+            self._sync_tree_highlight(idx)
+
+    def action_prev_file(self) -> None:
+        if self._current_file_idx > 0:
+            idx = self._current_file_idx - 1
+            self._load_file(idx)
+            self._sync_tree_highlight(idx)
+
+    def action_toggle_focus(self) -> None:
+        tree = self.query_one("#file-tree", Tree)
+        diff_view = self.query_one("#diff-view", DiffView)
+        if self.focused is tree or (self.focused and tree in self.focused.ancestors):
+            diff_view.focus()
+        else:
+            tree.focus()
+
+    # -- Comment handling --
+
+    def on_diff_view_comment_requested(self, event: DiffView.CommentRequested) -> None:
+        from womtrees.tui.comment_input import CommentInputDialog
+
+        context = f"{event.file}#L{event.source_start}"
+        if event.source_start != event.source_end:
+            context = f"{event.file}#L{event.source_start}-L{event.source_end}"
+
+        self.push_screen(
+            CommentInputDialog(context=context),
+            lambda text: self._on_comment_submitted(
+                text,
+                event.file,
+                event.start_line,
+                event.end_line,
+                event.source_start,
+                event.source_end,
+                event.diff_content,
+            ),
+        )
+
+    def _on_comment_submitted(
+        self,
+        text: str | None,
+        file: str,
+        start: int,
+        end: int,
+        source_start: int,
+        source_end: int,
+        diff_content: str = "",
+    ) -> None:
+        if text is None:
+            return
+        self._comments.append(
+            ReviewComment(
+                file=file,
+                start_line=start,
+                end_line=end,
+                comment_text=text,
+                source_start=source_start,
+                source_end=source_end,
+                diff_content=diff_content,
+            )
+        )
+        self._refresh_comments()
+
+    def on_diff_view_undo_comment(self, event: DiffView.UndoComment) -> None:
+        if self._comments:
+            self._comments.pop()
+            self._refresh_comments()
+            self.notify("Removed last comment")
+
+    def on_diff_view_delete_comment_at_cursor(
+        self, event: DiffView.DeleteCommentAtCursor
+    ) -> None:
+        if not self._diff.files:
+            return
+        current_file = self._diff.files[self._current_file_idx].path
+        diff_view = self.query_one("#diff-view", DiffView)
+        cursor = diff_view.cursor
+
+        for i, c in enumerate(self._comments):
+            if c.file == current_file and c.start_line <= cursor <= c.end_line:
+                self._comments.pop(i)
+                self._refresh_comments()
+                self.notify("Deleted comment")
+                return
+
+    def on_diff_view_edit_comment_at_cursor(
+        self, event: DiffView.EditCommentAtCursor
+    ) -> None:
+        if not self._diff.files:
+            return
+        current_file = self._diff.files[self._current_file_idx].path
+        diff_view = self.query_one("#diff-view", DiffView)
+        cursor = diff_view.cursor
+
+        for i, c in enumerate(self._comments):
+            if c.file == current_file and c.start_line <= cursor <= c.end_line:
+                from womtrees.tui.comment_input import CommentInputDialog
+
+                context = f"{c.file}#L{c.source_start}"
+                if c.source_start != c.source_end:
+                    context = f"{c.file}#L{c.source_start}-L{c.source_end}"
+
+                self.push_screen(
+                    CommentInputDialog(context=context, initial_text=c.comment_text),
+                    lambda text, idx=i: self._on_edit_submitted(text, idx),
+                )
+                return
+
+    def _on_edit_submitted(self, text: str | None, idx: int) -> None:
+        if text is None:
+            return
+        from dataclasses import replace
+
+        self._comments[idx] = replace(self._comments[idx], comment_text=text)
+        self._refresh_comments()
+
+    def on_diff_view_navigate_comment(self, event: DiffView.NavigateComment) -> None:
+        if not self._diff.files or not self._comments:
+            return
+        current_file = self._diff.files[self._current_file_idx].path
+        file_comments = sorted(
+            (c for c in self._comments if c.file == current_file),
+            key=lambda c: c.start_line,
+        )
+        if not file_comments:
+            return
+
+        diff_view = self.query_one("#diff-view", DiffView)
+        cursor = diff_view.cursor
+
+        if event.direction == 1:
+            # Find next comment after cursor
+            for c in file_comments:
+                if c.start_line > cursor:
+                    diff_view._cursor_pos = c.start_line
+                    diff_view._line_cache.clear()
+                    diff_view.refresh()
+                    diff_view._scroll_to_cursor()
+                    self._update_status()
+                    return
+            # Wrap around
+            diff_view._cursor_pos = file_comments[0].start_line
+            diff_view._line_cache.clear()
+            diff_view.refresh()
+            diff_view._scroll_to_cursor()
+        else:
+            # Find prev comment before cursor
+            for c in reversed(file_comments):
+                if c.start_line < cursor:
+                    diff_view._cursor_pos = c.start_line
+                    diff_view._line_cache.clear()
+                    diff_view.refresh()
+                    diff_view._scroll_to_cursor()
+                    self._update_status()
+                    return
+            # Wrap around
+            diff_view._cursor_pos = file_comments[-1].start_line
+            diff_view._line_cache.clear()
+            diff_view.refresh()
+            diff_view._scroll_to_cursor()
+
+        self._update_status()
+
+    def _refresh_comments(self) -> None:
+        """Re-render comments for the current file."""
+        if not self._diff.files:
+            return
+        diff_view = self.query_one("#diff-view", DiffView)
+        current_file = self._diff.files[self._current_file_idx].path
+        file_comments = [c for c in self._comments if c.file == current_file]
+        diff_view.set_comments(file_comments)
+        self._update_status()
+        self._update_tree_markers()
+
+    def _update_tree_markers(self) -> None:
+        """Update file tree to show comment markers."""
+        tree = self.query_one("#file-tree", Tree)
+        commented_files = {c.file for c in self._comments}
+        for node in tree.root.children:
+            if node.data is not None:
+                idx = int(node.data)
+                path = self._diff.files[idx].path
+                marker = "\u25cf " if path in commented_files else ""
+                node.set_label(f"{marker}{path}")
+
+    # -- Comment remapping --
+
+    @staticmethod
+    def _source_line_no_from_diff(df: DiffFile, idx: int) -> int:
+        """Map a diff view index to a real file line number."""
+        if idx >= len(df.lines):
+            return idx + 1
+        line = df.lines[idx]
+        return line.new_line_no or line.old_line_no or (idx + 1)
+
+    @staticmethod
+    def _find_content_in_diff(
+        df: DiffFile,
+        diff_content: str,
+        approx_source_line: int,
+    ) -> tuple[int, int] | None:
+        """Find consecutive lines in df matching diff_content.
+
+        Returns (start_idx, end_idx) in df.lines, or None if not found.
+        If multiple matches, picks the one closest to approx_source_line.
+        """
+        target_lines = diff_content.split("\n")
+        n = len(target_lines)
+        if n == 0:
+            return None
+
+        matches: list[tuple[int, int]] = []
+        for i in range(len(df.lines) - n + 1):
+            if all(df.lines[i + j].plain_text == target_lines[j] for j in range(n)):
+                matches.append((i, i + n - 1))
+
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+
+        # Pick closest to approx_source_line
+        def dist(m: tuple[int, int]) -> int:
+            src = df.lines[m[0]].new_line_no or df.lines[m[0]].old_line_no or m[0]
+            return abs(src - approx_source_line)
+
+        return min(matches, key=dist)
+
+    def _remap_comments(self) -> None:
+        """Remap comments to new diff positions.
+
+        Unmatched comments are kept as-is (their diff_content anchor remains
+        valid — they just don't appear in the current mode's diff and will
+        remap correctly when cycling back).
+        """
+        from dataclasses import replace
+
+        for i, comment in enumerate(self._comments):
+            if not comment.diff_content:
+                continue
+
+            # Find the file in the new diff
+            df = None
+            for f in self._diff.files:
+                if f.path == comment.file:
+                    df = f
+                    break
+
+            if df is None:
+                continue
+
+            # Force lazy-load if needed
+            if not df.lines:
+                full = compute_diff_for_file(
+                    self._repo_path,
+                    df.path,
+                    self._diff.base_ref,
+                    "HEAD",
+                    uncommitted=True,
+                )
+                df.lines = full.lines
+
+            match = self._find_content_in_diff(
+                df, comment.diff_content, comment.source_start
+            )
+            if match is not None:
+                start_idx, end_idx = match
+                self._comments[i] = replace(
+                    comment,
+                    start_line=start_idx,
+                    end_line=end_idx,
+                    source_start=self._source_line_no_from_diff(df, start_idx),
+                    source_end=self._source_line_no_from_diff(df, end_idx),
+                )
+
+    # -- Auto-refresh polling --
+
+    def _take_snapshot(
+        self,
+    ) -> tuple[str, tuple[tuple[str, float], ...]]:
+        """Capture HEAD rev + mtimes of files in the diff for change detection."""
+        try:
+            head = subprocess.run(
+                ["git", "-C", self._repo_path, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            head = ""
+
+        mtimes: list[tuple[str, float]] = []
+        for df in self._diff.files:
+            p = Path(self._repo_path) / df.path
+            try:
+                mtimes.append((df.path, p.stat().st_mtime))
+            except OSError:
+                mtimes.append((df.path, 0.0))
+
+        return (head, tuple(sorted(mtimes)))
+
+    def _poll_for_changes(self) -> None:
+        """Check for file/git changes and refresh if needed."""
+        new_snapshot = self._take_snapshot()
+        if new_snapshot == self._poll_snapshot:
+            return
+        self._poll_snapshot = new_snapshot
+        self._refresh_diff()
+
+    def _refresh_diff(self) -> None:
+        """Rebuild the diff in the current mode, remap comments, reload view."""
+        from womtrees.diff import list_diff_files
+
+        # Remember current file path and cursor to restore position
+        current_path: str | None = None
+        cursor_pos = 0
+        if self._diff.files and self._current_file_idx < len(self._diff.files):
+            current_path = self._diff.files[self._current_file_idx].path
+            cursor_pos = self.query_one("#diff-view", DiffView).cursor
+
+        self._diff = list_diff_files(
+            self._repo_path,
+            base_ref=self._base_ref,
+            uncommitted=self._uncommitted_mode,
+        )
+
+        if self._comments:
+            self._remap_comments()
+
+        # Restore file index by path
+        self._current_file_idx = 0
+        if current_path:
+            for i, df in enumerate(self._diff.files):
+                if df.path == current_path:
+                    self._current_file_idx = i
+                    break
+
+        self._reload_tree()
+
+        if self._diff.files:
+            self._load_file(self._current_file_idx)
+            # Restore cursor position
+            diff_view = self.query_one("#diff-view", DiffView)
+            count = len(self._diff.files[self._current_file_idx].lines)
+            diff_view._cursor_pos = min(cursor_pos, max(0, count - 1))
+            diff_view._line_cache.clear()
+            diff_view.refresh()
+            diff_view._scroll_to_cursor()
+        else:
+            self.query_one("#diff-view", DiffView).clear()
+
+        self._update_status()
+
+    # -- Mode cycling --
+
+    def action_cycle_mode(self) -> None:
+        """Toggle between uncommitted changes and branch diff."""
+        self._uncommitted_mode = not self._uncommitted_mode
+        self._refresh_diff()
+        self._poll_snapshot = self._take_snapshot()
+        label = "uncommitted" if self._uncommitted_mode else "branch"
+        self.notify(f"Mode: {label} ({len(self._diff.files)} files)")
+
+    def _reload_tree(self) -> None:
+        """Rebuild the file tree from current diff."""
+        tree = self.query_one("#file-tree", Tree)
+        tree.root.remove_children()
+        for i, df in enumerate(self._diff.files):
+            tree.root.add_leaf(df.path, data=str(i))
+        tree.root.expand()
+        self._update_tree_markers()
+
+    # -- Submission --
+
+    def action_submit_clipboard(self) -> None:
+        if not self._comments:
+            self.notify("No comments to submit", severity="warning")
+            return
+
+        from womtrees.review import copy_to_clipboard, format_comments
+
+        md = format_comments(self._comments)
+        copy_to_clipboard(md)
+        self.notify(f"Copied {len(self._comments)} comments to clipboard")
+
+    def action_clear_comments(self) -> None:
+        if not self._comments:
+            self.notify("No comments to clear", severity="warning")
+            return
+        count = len(self._comments)
+        self._comments.clear()
+        self._refresh_comments()
+        self.notify(f"Cleared {count} comments")
+
+    def action_help(self) -> None:
+        self.notify(
+            "j/k: navigate | ctrl+j/k: files | ]/[: hunks | m: cycle mode | "
+            "v: select | c: comment | e: edit | u: undo | x: delete | "
+            "n/N: nav comments | ctrl+c: copy | ctrl+x: clear | q: quit"
+        )

@@ -7,12 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 womtrees (`wt`) — Git worktree manager with tmux and Claude Code integration. CLI + TUI kanban board.
 
 ## Stack
+
 - Python 3.13+, Click (CLI), Textual (TUI), SQLite (storage)
 - Config: `~/.config/womtrees/config.toml` | Data: `~/.local/share/womtrees/`
 - Entry point: `wt = womtrees.cli:cli`
 
 ## Commands
-```
+
+```text
 uv run wt <command>      # Run CLI during development
 uv run pytest            # Run tests
 uv run pytest tests/test_cli.py::test_name  # Run a single test
@@ -22,6 +24,7 @@ uv run mypy src/         # Type check
 ```
 
 ## Rules
+
 - Keep CLI imports lean — use lazy imports in `src/womtrees/cli` so that we don't import textual/claude/pydantic
 - No ORM — plain SQLite queries in `db.py`
 - All subprocess calls (git, tmux) go through dedicated wrapper modules (`worktree.py`, `tmux.py`)
@@ -36,7 +39,8 @@ uv run mypy src/         # Type check
 **Data flow:** CLI command → `services/` (business logic) → `db.py` (SQLite) → `worktree.py`/`tmux.py` (subprocess) → `claude.py` (hooks)
 
 **Key modules in `src/womtrees/`:**
-- `cli/` — Click commands split across `items.py` (CRUD), `info.py` (list/status/attach), `hooks.py`, `admin.py`, `utils.py`
+
+- `cli/` — Click commands split across `items.py` (CRUD), `info.py` (list/status/attach), `hooks.py`, `admin.py`, `utils.py`, `review_diff.py` (diff viewer launcher)
 - `services/workitem.py` — Business logic for work item lifecycle (create, start, review, done, delete, merge, edit). Raises typed exceptions (`WorkItemNotFoundError`, `InvalidStateError`, `DuplicateBranchError`, `OpenPullRequestError`). CLI and TUI are thin callers.
 - `services/github.py` — GitHub PR detection/management via `gh` CLI. Exceptions: `PRNotFoundError`, `GitHubUnavailableError`.
 - `db.py` — All DB access; plain SQL, WAL mode, migration system (`SCHEMA_VERSION`), returns dataclasses. Use `connection()` context manager (or `get_connection()` for long-lived connections).
@@ -44,11 +48,17 @@ uv run mypy src/         # Type check
 - `worktree.py` — Git worktree create/remove/merge/list; repo detection
 - `tmux.py` — Tmux session/pane management; send-keys, attach, split
 - `claude.py` — Context detection (reads `$TMUX_PANE`, resolves work item from tmux env)
+- `diff.py` — Diff engine: `difflib` unified diffs + Pygments syntax highlighting. Pure data layer (`DiffLine`, `DiffFile`, `DiffResult`, `ReviewComment` dataclasses). No Textual imports.
+- `review.py` — Review submission: formats `ReviewComment` list as markdown, copies to clipboard (`pbcopy`/`xclip`), optionally sends to Claude via tmux
 - `config.py` — TOML config loading with typed `Config` dataclass
 - `tui/app.py` — Textual `WomtreesApp` with kanban board, vim-style navigation, dialog callbacks
+- `tui/diff_app.py` — Standalone Textual app for the diff viewer (two-panel: file tree + diff view). Manages comments, submission to clipboard/Claude.
+- `tui/diff_view.py` — Custom `ScrollView` widget with virtual scrolling (`render_line()`) for rendering diffs with vim navigation, visual selection, and comment markers.
+- `tui/comment_input.py` — Modal dialog for entering review comments on selected diff lines.
 - `tui/dialogs/` — Modal dialogs split into individual files: `create.py`, `edit.py`, `delete.py`, `merge.py`, `rebase.py`, `auto_rebase.py`, `claude_stream.py`, `help.py`. Re-exported from `tui/dialogs/__init__.py`.
 
 **TUI stable widget pattern (anti-flicker):** Cards and column widgets use update-in-place to avoid flicker from destroy/recreate cycles:
+
 - All cards have stable DOM IDs (`id=f"item-{work_item.id}"`, `id=f"unmanaged-{branch}"`). Never create throwaway cards without IDs.
 - Use `update_data()` + `_rebuild_children()` to update card content — replaces child `Static`s only, card widget stays in DOM so focus is preserved.
 - `KanbanColumn.card_map` (dict keyed by widget ID) and `_repo_header_map` track all mounted widgets. On refresh, diff against incoming data: remove gone widgets, call `update_data()` on existing ones, `mount()` only truly new ones.
@@ -60,7 +70,10 @@ uv run mypy src/         # Type check
 
 **TUI dialog key bindings:** `ctrl+s` is the universal submit/confirm shortcut across all dialogs. Use `Binding("ctrl+s", ..., priority=True)` — priority bindings fire before focused widgets consume the event. Note: `ctrl+enter` is not a valid terminal key (terminals send it as plain `enter`/`ctrl+m`). Button labels include the shortcut hint, e.g. `"Submit (ctrl+s)"`.
 
+**Textual key binding names:** Do NOT use `shift+<letter>` — it doesn't work reliably. Use the uppercase letter directly (e.g. `"G"` not `"shift+g"`, `"N"` not `"shift+n"`). For symbols, use the raw character or specific key name, not verbal names: `"]"` or `"right_square_bracket"` (not `"bracketright"`), `"["` or `"left_square_bracket"` (not `"bracketleft"`), `"}"` or `"right_curly_bracket"`, `"{"` or `"left_curly_bracket"`. Comma-separate multiple names for the same binding to cover variants: `Binding("right_square_bracket,]", ...)`.
+
 **State machines:**
+
 - WorkItem: `todo` → `working` → `input`/`review` → `done`
 - ClaudeSession: `working` → `waiting` → `done`
 - Hook commands (`wt hook heartbeat|input|stop|mark-done`) drive state transitions
@@ -68,6 +81,7 @@ uv run mypy src/         # Type check
 **DB schema:** Three tables — `work_items` (repo, branch, worktree path, tmux session, status), `claude_sessions` (FK to work_item, pane, pid, state, prompt), `pull_requests` (FK to work_item, number, status, url). Migrations in `db.py` `MIGRATIONS` dict.
 
 ## Testing Patterns
+
 - CLI tests use `click.testing.CliRunner`
 - Patch `womtrees.db.get_connection` with a temp DB factory (the `connection()` context manager calls `get_connection()` internally, so one patch covers both)
 - Patch `womtrees.cli.utils.get_current_repo` to isolate context
@@ -75,6 +89,7 @@ uv run mypy src/         # Type check
 - See existing fixtures in `tests/` for patterns
 
 ## Claude Hook System
+
 - `wt hook install` registers hooks in `~/.claude/settings.json` (UserPromptSubmit, PostToolUse, Notification, Stop)
 - Hooks call back into `wt hook heartbeat|input|stop` to update session state
 - `claude.py` detects context via tmux pane env vars → resolves work item ID
