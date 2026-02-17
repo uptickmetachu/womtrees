@@ -89,6 +89,7 @@ class DiffApp(App[None]):
         if self._diff.files:
             self._load_file(0)
 
+        self.query_one("#diff-view", DiffView).focus()
         self._update_status()
 
     def on_key(self, event: Key) -> None:
