@@ -67,8 +67,10 @@ class DiffView(ScrollView):
         """User pressed 'c' — wants to add a comment."""
 
         file: str
-        start_line: int
+        start_line: int  # diff view index (for internal matching)
         end_line: int
+        source_start: int  # real file line number (for display)
+        source_end: int
 
     @dataclass
     class NavigateComment(Message):
@@ -376,6 +378,13 @@ class DiffView(ScrollView):
 
     # -- Comment actions --
 
+    def _source_line_no(self, idx: int) -> int:
+        """Map a diff view index to a real file line number."""
+        if not self._diff_file or idx >= len(self._diff_file.lines):
+            return idx + 1
+        line = self._diff_file.lines[idx]
+        return line.new_line_no or line.old_line_no or (idx + 1)
+
     def action_comment(self) -> None:
         if not self._diff_file:
             return
@@ -389,6 +398,8 @@ class DiffView(ScrollView):
                 file=self._diff_file.path,
                 start_line=start,
                 end_line=end,
+                source_start=self._source_line_no(start),
+                source_end=self._source_line_no(end),
             )
         )
         self._selection_anchor = None

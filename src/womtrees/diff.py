@@ -48,9 +48,11 @@ class ReviewComment:
     """A review comment attached to a line range in a file."""
 
     file: str
-    start_line: int  # display line index in diff (0-based)
+    start_line: int  # diff view index (0-based, for cursor matching)
     end_line: int  # inclusive
     comment_text: str
+    source_start: int = 0  # real file line number (for display)
+    source_end: int = 0  # real file line number (for display)
 
 
 def _git(repo_path: str, *args: str) -> str:

@@ -169,14 +169,19 @@ class DiffApp(App[None]):
     def on_diff_view_comment_requested(self, event: DiffView.CommentRequested) -> None:
         from womtrees.tui.comment_input import CommentInputDialog
 
-        context = f"{event.file}:{event.start_line}"
-        if event.start_line != event.end_line:
-            context = f"{event.file}:{event.start_line}-{event.end_line}"
+        context = f"{event.file}#L{event.source_start}"
+        if event.source_start != event.source_end:
+            context = f"{event.file}#L{event.source_start}-L{event.source_end}"
 
         self.push_screen(
             CommentInputDialog(context=context),
             lambda text: self._on_comment_submitted(
-                text, event.file, event.start_line, event.end_line
+                text,
+                event.file,
+                event.start_line,
+                event.end_line,
+                event.source_start,
+                event.source_end,
             ),
         )
 
@@ -186,11 +191,20 @@ class DiffApp(App[None]):
         file: str,
         start: int,
         end: int,
+        source_start: int,
+        source_end: int,
     ) -> None:
         if text is None:
             return
         self._comments.append(
-            ReviewComment(file=file, start_line=start, end_line=end, comment_text=text)
+            ReviewComment(
+                file=file,
+                start_line=start,
+                end_line=end,
+                comment_text=text,
+                source_start=source_start,
+                source_end=source_end,
+            )
         )
         self._refresh_comments()
 
@@ -229,9 +243,9 @@ class DiffApp(App[None]):
             if c.file == current_file and c.start_line <= cursor <= c.end_line:
                 from womtrees.tui.comment_input import CommentInputDialog
 
-                context = f"{c.file}:{c.start_line}"
-                if c.start_line != c.end_line:
-                    context = f"{c.file}:{c.start_line}-{c.end_line}"
+                context = f"{c.file}#L{c.source_start}"
+                if c.source_start != c.source_end:
+                    context = f"{c.file}#L{c.source_start}-L{c.source_end}"
 
                 self.push_screen(
                     CommentInputDialog(context=context, initial_text=c.comment_text),

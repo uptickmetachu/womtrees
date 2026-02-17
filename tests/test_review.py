@@ -16,21 +16,35 @@ def test_format_comments_empty():
 def test_format_comments_single():
     """Single comment formats correctly."""
     comments = [
-        ReviewComment(file="a.py", start_line=5, end_line=5, comment_text="Fix this")
+        ReviewComment(
+            file="a.py",
+            start_line=5,
+            end_line=5,
+            comment_text="Fix this",
+            source_start=42,
+            source_end=42,
+        )
     ]
     result = format_comments(comments)
     assert "# Code Review" in result
-    assert "## a.py:5" in result
+    assert "## a.py#L42" in result
     assert "Fix this" in result
 
 
 def test_format_comments_range():
     """Comment with line range formats as start-end."""
     comments = [
-        ReviewComment(file="b.py", start_line=10, end_line=15, comment_text="Refactor")
+        ReviewComment(
+            file="b.py",
+            start_line=10,
+            end_line=15,
+            comment_text="Refactor",
+            source_start=100,
+            source_end=105,
+        )
     ]
     result = format_comments(comments)
-    assert "## b.py:10-15" in result
+    assert "## b.py#L100-L105" in result
 
 
 def test_format_comments_multiple():

@@ -15,10 +15,10 @@ def format_comments(comments: list[ReviewComment]) -> str:
 
     sections: list[str] = ["# Code Review", ""]
     for comment in comments:
-        if comment.start_line == comment.end_line:
-            header = f"## {comment.file}:{comment.start_line}"
+        if comment.source_start == comment.source_end:
+            header = f"## {comment.file}#L{comment.source_start}"
         else:
-            header = f"## {comment.file}:{comment.start_line}-{comment.end_line}"
+            header = f"## {comment.file}#L{comment.source_start}-L{comment.source_end}"
         sections.append(header)
         sections.append(comment.comment_text)
         sections.append("")
