@@ -254,7 +254,10 @@ class DiffApp(App[None]):
         if not self._diff.files or not self._comments:
             return
         current_file = self._diff.files[self._current_file_idx].path
-        file_comments = [c for c in self._comments if c.file == current_file]
+        file_comments = sorted(
+            (c for c in self._comments if c.file == current_file),
+            key=lambda c: c.start_line,
+        )
         if not file_comments:
             return
 
