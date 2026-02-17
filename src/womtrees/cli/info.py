@@ -374,9 +374,9 @@ def attach(item_id: int, session_id: int | None) -> None:
             if session and session.tmux_pane:
                 tmux.select_pane(tmux_session, session.tmux_pane)
 
-    # Flash womtrees splash in tmux status area (non-blocking, no input steal)
-    tmux.display_message(
-        tmux_session, f"🐻🌳 womtrees | {item.name + '  ' if item.name else ''}[{item.branch}]"
+    tmux.set_status_left(
+        tmux_session,
+        f" 🐻🌳 {item.name + ' | ' if item.name else ''}[{item.branch}] ",
     )
 
     tmux.attach(tmux_session)
