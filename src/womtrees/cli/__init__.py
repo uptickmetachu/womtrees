@@ -29,6 +29,7 @@ from womtrees.cli.items import (  # noqa: E402
     start,
     todo,
 )
+from womtrees.cli.popups import popup  # noqa: E402
 
 
 @click.group()
@@ -55,6 +56,9 @@ cli.add_command(cycle)
 
 # Register hook group
 cli.add_command(hook)
+
+# Register popup group
+cli.add_command(popup)
 
 # Register admin commands
 cli.add_command(board)

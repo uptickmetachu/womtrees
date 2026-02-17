@@ -125,6 +125,29 @@ def attach(name: str) -> None:
         subprocess.run(["tmux", "attach-session", "-t", name])
 
 
+def display_popup(
+    command: str,
+    width: str = "80%",
+    height: str = "70%",
+    title: str | None = None,
+) -> None:
+    """Open a tmux popup that runs the given command.
+
+    The popup closes automatically when the command exits (-E flag).
+    Must be called from inside a tmux session.
+    """
+    args = ["tmux", "display-popup", "-E", "-w", width, "-h", height]
+    if title:
+        args.extend(["-T", title])
+    args.append(command)
+    subprocess.run(args)
+
+
+def is_inside_tmux() -> bool:
+    """Check if we are currently inside a tmux session."""
+    return bool(os.environ.get("TMUX"))
+
+
 def is_available() -> bool:
     """Check if tmux is installed."""
     try:
