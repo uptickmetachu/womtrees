@@ -23,28 +23,16 @@ def db_conn(tmp_path):
     db_path = tmp_path / "test.db"
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
     _ensure_schema(conn)
 
     def _get_conn(db_path_arg=None):
         c = sqlite3.connect(str(db_path))
         c.row_factory = sqlite3.Row
-        _ensure_schema(c)
+        c.execute("PRAGMA foreign_keys=ON")
         return c
 
     return _get_conn, db_path
-
-
-@pytest.fixture
-def git_repo(tmp_path):
-    repo = tmp_path / "myrepo"
-    repo.mkdir()
-    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(repo), "commit", "--allow-empty", "-m", "init"],
-        check=True,
-        capture_output=True,
-    )
-    return repo
 
 
 def test_help(runner):

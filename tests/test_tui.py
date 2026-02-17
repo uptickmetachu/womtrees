@@ -192,7 +192,7 @@ class TestCheckRefresh:
     async def test_refreshes_when_mtime_changes(self, tmp_path):
         """_check_refresh triggers refresh when mtime changes."""
         from womtrees.tui.app import WomtreesApp
-        import time
+        import os
 
         db_file = tmp_path / "womtrees.db"
         db_file.write_text("v1")
@@ -212,19 +212,20 @@ class TestCheckRefresh:
                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]),
             ):
                 app = WomtreesApp()
+                app._DEBOUNCE_SECONDS = 0.01
                 async with app.run_test(size=(120, 40)) as pilot:
                     app._db_path = db_file
                     app._last_db_mtime = db_file.stat().st_mtime
                     call_count_before = mock_conn.call_count
 
-                    # Modify the file to change mtime
-                    time.sleep(0.05)
-                    db_file.write_text("v2")
+                    # Force a different mtime by touching with a future timestamp
+                    orig_mtime = db_file.stat().st_mtime
+                    os.utime(db_file, (orig_mtime + 2, orig_mtime + 2))
 
                     app._check_refresh()
                     # Debounce timer schedules refresh — wait for it to fire
                     assert app._debounce_timer is not None
-                    await pilot.pause(app._DEBOUNCE_SECONDS + 0.1)
+                    await pilot.pause(app._DEBOUNCE_SECONDS + 0.05)
                     # Should have triggered a refresh (new get_connection call)
                     assert mock_conn.call_count > call_count_before
 

@@ -27,10 +27,17 @@ def runner():
 def db_conn(tmp_path):
     db_path = tmp_path / "test.db"
 
+    # Initialize schema once
+    init_conn = sqlite3.connect(str(db_path))
+    init_conn.row_factory = sqlite3.Row
+    init_conn.execute("PRAGMA foreign_keys=ON")
+    _ensure_schema(init_conn)
+    init_conn.close()
+
     def _get_conn(db_path_arg=None):
         c = sqlite3.connect(str(db_path))
         c.row_factory = sqlite3.Row
-        _ensure_schema(c)
+        c.execute("PRAGMA foreign_keys=ON")
         return c
 
     return _get_conn, db_path
