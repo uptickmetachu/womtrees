@@ -53,6 +53,7 @@ class ReviewComment:
     comment_text: str
     source_start: int = 0  # real file line number (for display)
     source_end: int = 0  # real file line number (for display)
+    diff_content: str = ""  # joined plain_text of commented DiffLines (content anchor)
 
 
 def _git(repo_path: str, *args: str) -> str:
@@ -279,6 +280,10 @@ def list_diff_files(
 
     Returns a DiffResult with stub DiffFile objects (path only, no lines).
     Use compute_diff_for_file() to lazily load the full diff for a file.
+
+    Both modes diff against the working tree:
+    - uncommitted: HEAD vs working tree
+    - branch: base_ref vs working tree (committed + uncommitted changes)
     """
     from womtrees.worktree import get_default_branch
 
@@ -292,8 +297,15 @@ def list_diff_files(
         label_target = "working tree"
         actual_base = "HEAD"
     else:
+        # Branch mode: committed changes + uncommitted changes
         files = list_changed_files(repo_path, base_ref, target_ref)
-        label_target = target_ref
+        uncommitted_files = list_uncommitted_files(repo_path)
+        seen = set(files)
+        for f in uncommitted_files:
+            if f not in seen:
+                files.append(f)
+                seen.add(f)
+        label_target = "working tree"
         actual_base = base_ref
 
     diff_files = [DiffFile(path=f, language=_detect_language(f)) for f in files]
@@ -318,7 +330,8 @@ def compute_diff(
         repo_path: Path to the git repository
         base_ref: Base reference (default: auto-detect default branch)
         target_ref: Target reference (default: HEAD)
-        uncommitted: If True, compare HEAD vs working tree
+        uncommitted: If True, compare HEAD vs working tree;
+                     otherwise base_ref vs working tree (committed + uncommitted)
     """
     from womtrees.worktree import get_default_branch
 
@@ -333,17 +346,24 @@ def compute_diff(
         actual_base = "HEAD"
     else:
         files = list_changed_files(repo_path, base_ref, target_ref)
-        label_target = target_ref
+        uncommitted_files = list_uncommitted_files(repo_path)
+        seen = set(files)
+        for f in uncommitted_files:
+            if f not in seen:
+                files.append(f)
+                seen.add(f)
+        label_target = "working tree"
         actual_base = base_ref
 
     diff_files: list[DiffFile] = []
     for f in files:
+        # Both modes always diff against working tree
         diff_file = compute_diff_for_file(
             repo_path,
             f,
             actual_base,
             target_ref,
-            uncommitted=uncommitted,
+            uncommitted=True,
         )
         if diff_file.lines:
             diff_files.append(diff_file)

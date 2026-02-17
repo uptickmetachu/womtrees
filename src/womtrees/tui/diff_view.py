@@ -71,6 +71,7 @@ class DiffView(ScrollView):
         end_line: int
         source_start: int  # real file line number (for display)
         source_end: int
+        diff_content: str = ""  # joined plain_text of selected DiffLines
 
     @dataclass
     class NavigateComment(Message):
@@ -393,6 +394,9 @@ class DiffView(ScrollView):
             start, end = sel
         else:
             start = end = self._cursor_pos
+        diff_content = "\n".join(
+            line.plain_text for line in self._diff_file.lines[start : end + 1]
+        )
         self.post_message(
             self.CommentRequested(
                 file=self._diff_file.path,
@@ -400,6 +404,7 @@ class DiffView(ScrollView):
                 end_line=end,
                 source_start=self._source_line_no(start),
                 source_end=self._source_line_no(end),
+                diff_content=diff_content,
             )
         )
         self._selection_anchor = None

@@ -10,7 +10,7 @@ from textual.containers import Horizontal
 from textual.events import Key
 from textual.widgets import Footer, Header, Static, Tree
 
-from womtrees.diff import DiffResult, ReviewComment, compute_diff_for_file
+from womtrees.diff import DiffFile, DiffResult, ReviewComment, compute_diff_for_file
 from womtrees.tui.diff_view import DiffView
 
 
@@ -113,13 +113,14 @@ class DiffApp(App[None]):
             self._current_file_idx = idx
             df = self._diff.files[idx]
             # Lazy load: compute full diff on first access
+            # Both modes diff against working tree (different base refs)
             if not df.lines:
                 full = compute_diff_for_file(
                     self._repo_path,
                     df.path,
                     self._diff.base_ref,
                     "HEAD",
-                    uncommitted=self._uncommitted_mode,
+                    uncommitted=True,
                 )
                 df.lines = full.lines
             diff_view = self.query_one("#diff-view", DiffView)
@@ -192,6 +193,7 @@ class DiffApp(App[None]):
                 event.end_line,
                 event.source_start,
                 event.source_end,
+                event.diff_content,
             ),
         )
 
@@ -203,6 +205,7 @@ class DiffApp(App[None]):
         end: int,
         source_start: int,
         source_end: int,
+        diff_content: str = "",
     ) -> None:
         if text is None:
             return
@@ -214,6 +217,7 @@ class DiffApp(App[None]):
                 comment_text=text,
                 source_start=source_start,
                 source_end=source_end,
+                diff_content=diff_content,
             )
         )
         self._refresh_comments()
@@ -266,12 +270,9 @@ class DiffApp(App[None]):
     def _on_edit_submitted(self, text: str | None, idx: int) -> None:
         if text is None:
             return
-        self._comments[idx] = ReviewComment(
-            file=self._comments[idx].file,
-            start_line=self._comments[idx].start_line,
-            end_line=self._comments[idx].end_line,
-            comment_text=text,
-        )
+        from dataclasses import replace
+
+        self._comments[idx] = replace(self._comments[idx], comment_text=text)
         self._refresh_comments()
 
     def on_diff_view_navigate_comment(self, event: DiffView.NavigateComment) -> None:
@@ -343,6 +344,96 @@ class DiffApp(App[None]):
                 marker = "\u25cf " if path in commented_files else ""
                 node.set_label(f"{marker}{path}")
 
+    # -- Comment remapping --
+
+    @staticmethod
+    def _source_line_no_from_diff(df: DiffFile, idx: int) -> int:
+        """Map a diff view index to a real file line number."""
+        if idx >= len(df.lines):
+            return idx + 1
+        line = df.lines[idx]
+        return line.new_line_no or line.old_line_no or (idx + 1)
+
+    @staticmethod
+    def _find_content_in_diff(
+        df: DiffFile,
+        diff_content: str,
+        approx_source_line: int,
+    ) -> tuple[int, int] | None:
+        """Find consecutive lines in df matching diff_content.
+
+        Returns (start_idx, end_idx) in df.lines, or None if not found.
+        If multiple matches, picks the one closest to approx_source_line.
+        """
+        target_lines = diff_content.split("\n")
+        n = len(target_lines)
+        if n == 0:
+            return None
+
+        matches: list[tuple[int, int]] = []
+        for i in range(len(df.lines) - n + 1):
+            if all(df.lines[i + j].plain_text == target_lines[j] for j in range(n)):
+                matches.append((i, i + n - 1))
+
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+
+        # Pick closest to approx_source_line
+        def dist(m: tuple[int, int]) -> int:
+            src = df.lines[m[0]].new_line_no or df.lines[m[0]].old_line_no or m[0]
+            return abs(src - approx_source_line)
+
+        return min(matches, key=dist)
+
+    def _remap_comments(self) -> None:
+        """Remap comments to new diff positions.
+
+        Unmatched comments are kept as-is (their diff_content anchor remains
+        valid — they just don't appear in the current mode's diff and will
+        remap correctly when cycling back).
+        """
+        from dataclasses import replace
+
+        for i, comment in enumerate(self._comments):
+            if not comment.diff_content:
+                continue
+
+            # Find the file in the new diff
+            df = None
+            for f in self._diff.files:
+                if f.path == comment.file:
+                    df = f
+                    break
+
+            if df is None:
+                continue
+
+            # Force lazy-load if needed
+            if not df.lines:
+                full = compute_diff_for_file(
+                    self._repo_path,
+                    df.path,
+                    self._diff.base_ref,
+                    "HEAD",
+                    uncommitted=True,
+                )
+                df.lines = full.lines
+
+            match = self._find_content_in_diff(
+                df, comment.diff_content, comment.source_start
+            )
+            if match is not None:
+                start_idx, end_idx = match
+                self._comments[i] = replace(
+                    comment,
+                    start_line=start_idx,
+                    end_line=end_idx,
+                    source_start=self._source_line_no_from_diff(df, start_idx),
+                    source_end=self._source_line_no_from_diff(df, end_idx),
+                )
+
     # -- Mode cycling --
 
     def action_cycle_mode(self) -> None:
@@ -356,6 +447,10 @@ class DiffApp(App[None]):
             base_ref=self._base_ref,
             uncommitted=self._uncommitted_mode,
         )
+
+        # Remap comments to new diff positions (unmatched kept as-is)
+        if self._comments:
+            self._remap_comments()
 
         self._current_file_idx = 0
         self._reload_tree()
