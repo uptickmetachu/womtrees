@@ -17,7 +17,7 @@ from womtrees.tui.diff_view import DiffView
 class DiffApp(App[None]):
     """Two-panel diff viewer: file tree + unified diff."""
 
-    TITLE = "womtrees review-diff"
+    TITLE = "review-diff"
 
     CSS = """
     #diff-layout {
@@ -46,8 +46,8 @@ class DiffApp(App[None]):
         Binding("q", "quit", "Quit", show=True),
         Binding("question_mark", "help", "Help", show=True),
         Binding("tab", "toggle_focus", "Toggle focus", show=False),
-        Binding("shift+j", "next_file", "Next file", show=False, priority=True),
-        Binding("shift+k", "prev_file", "Prev file", show=False, priority=True),
+        Binding("ctrl+j", "next_file", "Next file", show=False, priority=True),
+        Binding("ctrl+k", "prev_file", "Prev file", show=False, priority=True),
         Binding(
             "ctrl+s", "submit_clipboard", "Submit (clipboard)", show=True, priority=True
         ),
@@ -116,6 +116,7 @@ class DiffApp(App[None]):
                 c for c in self._comments if c.file == self._diff.files[idx].path
             ]
             diff_view.set_comments(file_comments)
+            self.title = self._diff.files[idx].path
             self._update_status()
 
     def _update_status(self) -> None:
@@ -134,15 +135,26 @@ class DiffApp(App[None]):
             )
         self.query_one("#diff-status", Static).update(status_text)
 
+    def _sync_tree_highlight(self, idx: int) -> None:
+        """Move the file tree highlight to match the current file index."""
+        tree = self.query_one("#file-tree", Tree)
+        children = list(tree.root.children)
+        if 0 <= idx < len(children):
+            tree.move_cursor(children[idx])
+
     # -- File navigation --
 
     def action_next_file(self) -> None:
         if self._current_file_idx < len(self._diff.files) - 1:
-            self._load_file(self._current_file_idx + 1)
+            idx = self._current_file_idx + 1
+            self._load_file(idx)
+            self._sync_tree_highlight(idx)
 
     def action_prev_file(self) -> None:
         if self._current_file_idx > 0:
-            self._load_file(self._current_file_idx - 1)
+            idx = self._current_file_idx - 1
+            self._load_file(idx)
+            self._sync_tree_highlight(idx)
 
     def action_toggle_focus(self) -> None:
         tree = self.query_one("#file-tree", Tree)
@@ -334,7 +346,7 @@ class DiffApp(App[None]):
 
     def action_help(self) -> None:
         self.notify(
-            "j/k: navigate | J/K: files | ]/[: hunks | m: cycle mode | "
+            "j/k: navigate | ctrl+j/k: files | ]/[: hunks | m: cycle mode | "
             "v: select | c: comment | u: undo | x: delete | "
             "n/N: nav comments | ctrl+s: submit | S: submit+Claude | q: quit"
         )
