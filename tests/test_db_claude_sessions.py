@@ -21,7 +21,7 @@ def _in_memory_conn() -> sqlite3.Connection:
     return conn
 
 
-def test_create_and_get_session():
+def test_create_and_get_session() -> None:
     conn = _in_memory_conn()
     session = create_claude_session(
         conn,
@@ -44,7 +44,7 @@ def test_create_and_get_session():
     assert fetched.id == session.id
 
 
-def test_create_session_with_work_item():
+def test_create_session_with_work_item() -> None:
     conn = _in_memory_conn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     session = create_claude_session(
@@ -59,7 +59,7 @@ def test_create_session_with_work_item():
     assert session.work_item_id == item.id
 
 
-def test_list_sessions_by_work_item():
+def test_list_sessions_by_work_item() -> None:
     conn = _in_memory_conn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
     create_claude_session(
@@ -93,7 +93,7 @@ def test_list_sessions_by_work_item():
     assert len(sessions) == 2
 
 
-def test_list_sessions_by_repo():
+def test_list_sessions_by_repo() -> None:
     conn = _in_memory_conn()
     create_claude_session(
         conn,
@@ -117,7 +117,7 @@ def test_list_sessions_by_repo():
     assert sessions[0].repo_name == "myrepo"
 
 
-def test_list_sessions_by_state():
+def test_list_sessions_by_state() -> None:
     conn = _in_memory_conn()
     create_claude_session(
         conn,
@@ -143,7 +143,7 @@ def test_list_sessions_by_state():
     assert sessions[0].state == "waiting"
 
 
-def test_update_session():
+def test_update_session() -> None:
     conn = _in_memory_conn()
     session = create_claude_session(
         conn,
@@ -161,7 +161,7 @@ def test_update_session():
     assert updated.updated_at > session.updated_at
 
 
-def test_delete_session():
+def test_delete_session() -> None:
     conn = _in_memory_conn()
     session = create_claude_session(
         conn,
@@ -175,7 +175,7 @@ def test_delete_session():
     assert get_claude_session(conn, session.id) is None
 
 
-def test_find_session():
+def test_find_session() -> None:
     conn = _in_memory_conn()
     create_claude_session(
         conn,
@@ -204,7 +204,7 @@ def test_find_session():
     assert not_found is None
 
 
-def test_find_session_includes_done():
+def test_find_session_includes_done() -> None:
     conn = _in_memory_conn()
     create_claude_session(
         conn,

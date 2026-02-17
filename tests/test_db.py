@@ -23,7 +23,7 @@ def _in_memory_conn() -> sqlite3.Connection:
     return conn
 
 
-def test_create_and_get():
+def test_create_and_get() -> None:
     conn = _in_memory_conn()
     item = create_work_item(
         conn,
@@ -46,12 +46,12 @@ def test_create_and_get():
     assert fetched.branch == item.branch
 
 
-def test_get_nonexistent():
+def test_get_nonexistent() -> None:
     conn = _in_memory_conn()
     assert get_work_item(conn, 999) is None
 
 
-def test_list_all():
+def test_list_all() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
     create_work_item(conn, "repo2", "/tmp/repo2", "branch-b")
@@ -61,7 +61,7 @@ def test_list_all():
     assert len(items) == 3
 
 
-def test_list_by_repo():
+def test_list_by_repo() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
     create_work_item(conn, "repo2", "/tmp/repo2", "branch-b")
@@ -72,7 +72,7 @@ def test_list_by_repo():
     assert all(i.repo_name == "repo1" for i in items)
 
 
-def test_list_by_status():
+def test_list_by_status() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "repo1", "/tmp/repo1", "a", status="todo")
     create_work_item(conn, "repo1", "/tmp/repo1", "b", status="working")
@@ -83,7 +83,7 @@ def test_list_by_status():
     assert all(i.status == "todo" for i in items)
 
 
-def test_update():
+def test_update() -> None:
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
 
@@ -101,7 +101,7 @@ def test_update():
     assert updated.updated_at > item.updated_at
 
 
-def test_delete():
+def test_delete() -> None:
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-a")
 
@@ -109,7 +109,7 @@ def test_delete():
     assert get_work_item(conn, item.id) is None
 
 
-def test_delete_with_pull_request():
+def test_delete_with_pull_request() -> None:
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "branch-pr")
     create_pull_request(conn, item.id, number=42, owner="me", repo="repo1")
@@ -118,19 +118,19 @@ def test_delete_with_pull_request():
     assert get_work_item(conn, item.id) is None
 
 
-def test_delete_nonexistent():
+def test_delete_nonexistent() -> None:
     conn = _in_memory_conn()
     assert delete_work_item(conn, 999) is False
 
 
-def test_duplicate_branch_raises():
+def test_duplicate_branch_raises() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
     with pytest.raises(ValueError, match="already has an active work item"):
         create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
 
 
-def test_duplicate_branch_allowed_after_done():
+def test_duplicate_branch_allowed_after_done() -> None:
     conn = _in_memory_conn()
     item = create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
     update_work_item(conn, item.id, status="done")
@@ -139,12 +139,12 @@ def test_duplicate_branch_allowed_after_done():
     assert item2.id != item.id
 
 
-def test_list_repos_empty():
+def test_list_repos_empty() -> None:
     conn = _in_memory_conn()
     assert list_repos(conn) == []
 
 
-def test_list_repos_distinct():
+def test_list_repos_distinct() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "repo1", "/tmp/repo1", "a")
     create_work_item(conn, "repo2", "/tmp/repo2", "b")
@@ -156,7 +156,7 @@ def test_list_repos_distinct():
     assert ("repo2", "/tmp/repo2") in repos
 
 
-def test_list_repos_ordered():
+def test_list_repos_ordered() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "zebra", "/tmp/zebra", "a")
     create_work_item(conn, "alpha", "/tmp/alpha", "b")
@@ -166,7 +166,7 @@ def test_list_repos_ordered():
     assert repos[1][0] == "zebra"
 
 
-def test_duplicate_branch_allowed_different_repo():
+def test_duplicate_branch_allowed_different_repo() -> None:
     conn = _in_memory_conn()
     create_work_item(conn, "repo1", "/tmp/repo1", "feat/dup")
     # Same branch in a different repo is fine

@@ -8,7 +8,7 @@ from womtrees.claude import detect_context, install_global_hooks, is_pid_alive
 
 @patch("womtrees.claude.CLAUDE_SETTINGS_DIR")
 @patch("womtrees.claude.CLAUDE_SETTINGS_FILE")
-def test_install_global_hooks_fresh(mock_file, mock_dir, tmp_path):
+def test_install_global_hooks_fresh(mock_file, mock_dir, tmp_path) -> None:
     """Test installing hooks when no settings file exists."""
     settings_file = tmp_path / "settings.json"
     mock_file.__eq__ = lambda self, other: False
@@ -44,7 +44,7 @@ def test_install_global_hooks_fresh(mock_file, mock_dir, tmp_path):
 
 @patch("womtrees.claude.CLAUDE_SETTINGS_DIR")
 @patch("womtrees.claude.CLAUDE_SETTINGS_FILE")
-def test_install_global_hooks_existing(mock_file, mock_dir, tmp_path):
+def test_install_global_hooks_existing(mock_file, mock_dir, tmp_path) -> None:
     """Test installing hooks preserves existing settings."""
     settings_file = tmp_path / "settings.json"
     settings_file.write_text(json.dumps({"existing_key": "value", "hooks": {}}))
@@ -62,7 +62,7 @@ def test_install_global_hooks_existing(mock_file, mock_dir, tmp_path):
 
 @patch("womtrees.claude.CLAUDE_SETTINGS_DIR")
 @patch("womtrees.claude.CLAUDE_SETTINGS_FILE")
-def test_install_global_hooks_no_duplicate(mock_file, mock_dir, tmp_path):
+def test_install_global_hooks_no_duplicate(mock_file, mock_dir, tmp_path) -> None:
     """Test that installing hooks twice doesn't duplicate."""
     settings_file = tmp_path / "settings.json"
 
@@ -87,7 +87,7 @@ def test_install_global_hooks_no_duplicate(mock_file, mock_dir, tmp_path):
 
 
 @patch("subprocess.run")
-def test_detect_context(mock_run):
+def test_detect_context(mock_run) -> None:
     """Test context detection with mocked environment."""
 
     def side_effect(args, **kwargs):
@@ -125,7 +125,7 @@ def test_detect_context(mock_run):
 
 
 @patch("subprocess.run")
-def test_detect_context_no_tmux(mock_run):
+def test_detect_context_no_tmux(mock_run) -> None:
     """Test context detection outside tmux."""
     mock_run.side_effect = FileNotFoundError
 
@@ -136,13 +136,13 @@ def test_detect_context_no_tmux(mock_run):
     assert ctx["tmux_pane"] == ""
 
 
-def test_is_pid_alive_current_process():
+def test_is_pid_alive_current_process() -> None:
     """Test that our own PID is alive."""
     import os
 
     assert is_pid_alive(os.getpid()) is True
 
 
-def test_is_pid_alive_dead_process():
+def test_is_pid_alive_dead_process() -> None:
     """Test that a very large PID is not alive."""
     assert is_pid_alive(999999999) is False

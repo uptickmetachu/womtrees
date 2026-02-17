@@ -35,14 +35,14 @@ def db_conn(tmp_path):
     return _get_conn, db_path
 
 
-def test_help(runner):
+def test_help(runner) -> None:
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
     assert "womtrees" in result.output
 
 
-def test_todo_not_in_repo(runner, tmp_path, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_todo_not_in_repo(runner, tmp_path, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch("womtrees.cli.utils.get_current_repo", return_value=None),
@@ -52,8 +52,8 @@ def test_todo_not_in_repo(runner, tmp_path, db_conn):
         assert "Not inside a git repository" in result.output
 
 
-def test_todo_creates_item(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_todo_creates_item(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -66,8 +66,8 @@ def test_todo_creates_item(runner, db_conn):
         assert "Created TODO #1" in result.output
 
 
-def test_list_empty(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_list_empty(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
     ):
@@ -76,8 +76,8 @@ def test_list_empty(runner, db_conn):
         assert "No work items found" in result.output
 
 
-def test_list_shows_items(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_list_shows_items(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -94,8 +94,8 @@ def test_list_shows_items(runner, db_conn):
         assert "feat/b" in result.output
 
 
-def test_status_summary(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_status_summary(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -111,8 +111,8 @@ def test_status_summary(runner, db_conn):
         assert "todo: 2" in result.output
 
 
-def test_status_single(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_status_single(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -128,8 +128,8 @@ def test_status_single(runner, db_conn):
         assert "my prompt" in result.output
 
 
-def test_review_transition(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_review_transition(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -145,8 +145,8 @@ def test_review_transition(runner, db_conn):
         assert "expected 'working' or 'input'" in result.output
 
 
-def test_done_transition(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_done_transition(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -162,8 +162,8 @@ def test_done_transition(runner, db_conn):
         assert "expected 'working' or 'input' or 'review'" in result.output
 
 
-def test_delete_todo(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_delete_todo(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -181,15 +181,15 @@ def test_delete_todo(runner, db_conn):
         assert "No work items found" in result.output
 
 
-def test_delete_nonexistent(runner, db_conn):
-    get_conn_fn, db_path = db_conn
+def test_delete_nonexistent(runner, db_conn) -> None:
+    get_conn_fn, _db_path = db_conn
     with patch("womtrees.db.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["delete", "999"])
         assert result.exit_code != 0
         assert "not found" in result.output
 
 
-def test_config_show(runner, tmp_path):
+def test_config_show(runner, tmp_path) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text('[worktrees]\nbase_dir = "/tmp/wt"\n')
     with patch("womtrees.cli.admin.ensure_config", return_value=config_file):
@@ -201,9 +201,9 @@ def test_config_show(runner, tmp_path):
 # Phase 2: tmux integration tests
 
 
-def test_start_creates_tmux_session(runner, db_conn, tmp_path):
+def test_start_creates_tmux_session(runner, db_conn, tmp_path) -> None:
     """Test that wt start creates a tmux session and updates the work item."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -248,9 +248,9 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path):
         mock_swap.assert_called_once()  # claude_pane=left triggers swap
 
 
-def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path):
+def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path) -> None:
     """Test that swap_pane is NOT called when claude_pane is 'right'."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -281,9 +281,9 @@ def test_start_no_swap_when_claude_right(runner, db_conn, tmp_path):
         mock_swap.assert_not_called()
 
 
-def test_start_fails_without_tmux(runner, db_conn):
+def test_start_fails_without_tmux(runner, db_conn) -> None:
     """Test that start fails gracefully when tmux is not installed."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
 
@@ -302,9 +302,9 @@ def test_start_fails_without_tmux(runner, db_conn):
         assert "tmux is required" in result.output
 
 
-def test_delete_kills_tmux_session(runner, db_conn, tmp_path):
+def test_delete_kills_tmux_session(runner, db_conn, tmp_path) -> None:
     """Test that deleting a work item kills its tmux session."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -341,9 +341,9 @@ def test_delete_kills_tmux_session(runner, db_conn, tmp_path):
         mock_kill.assert_called_once_with("myrepo/feat-x")
 
 
-def test_attach_command(runner, db_conn, tmp_path):
+def test_attach_command(runner, db_conn, tmp_path) -> None:
     """Test wt attach jumps to the tmux session."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -378,9 +378,9 @@ def test_attach_command(runner, db_conn, tmp_path):
         mock_attach.assert_called_once_with("myrepo/feat-x")
 
 
-def test_attach_rejects_todo_item(runner, db_conn):
+def test_attach_rejects_todo_item(runner, db_conn) -> None:
     """Test that wt attach refuses to jump into a TODO work item."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -397,9 +397,9 @@ def test_attach_rejects_todo_item(runner, db_conn):
         assert "Start it first" in result.output
 
 
-def test_attach_restores_missing_session(runner, db_conn):
+def test_attach_restores_missing_session(runner, db_conn) -> None:
     """Test wt attach recreates tmux session when it no longer exists."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -435,9 +435,9 @@ def test_attach_restores_missing_session(runner, db_conn):
         mock_attach.assert_called_once()
 
 
-def test_attach_resumes_dead_session(runner, db_conn, tmp_path):
+def test_attach_resumes_dead_session(runner, db_conn, tmp_path) -> None:
     """Test that wt attach relaunches Claude if the process is dead."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -493,9 +493,9 @@ def test_attach_resumes_dead_session(runner, db_conn, tmp_path):
         assert "--resume test-uuid-123" in call_args[0][1]
 
 
-def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path):
+def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path) -> None:
     """Test that wt attach falls back to --continue if no session_id."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -546,9 +546,9 @@ def test_attach_resumes_with_continue_fallback(runner, db_conn, tmp_path):
         assert "--continue" in call_args[0][1]
 
 
-def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path):
+def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path) -> None:
     """Test that wt attach does NOT relaunch Claude if process is alive."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -589,9 +589,11 @@ def test_attach_skips_resume_if_alive(runner, db_conn, tmp_path):
         mock_send_keys.assert_not_called()
 
 
-def test_attach_skips_resume_if_another_session_alive(runner, db_conn, tmp_path):
+def test_attach_skips_resume_if_another_session_alive(
+    runner, db_conn, tmp_path
+) -> None:
     """Don't resume a dead session when another session is still running."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -660,9 +662,9 @@ def test_attach_skips_resume_if_another_session_alive(runner, db_conn, tmp_path)
         mock_send_keys.assert_not_called()
 
 
-def test_todo_with_repo_option(runner, db_conn, tmp_path):
+def test_todo_with_repo_option(runner, db_conn, tmp_path) -> None:
     """Test that -r option overrides current repo detection."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     target_repo = tmp_path / "other-project"
     target_repo.mkdir()
 
@@ -689,9 +691,9 @@ def test_todo_with_repo_option(runner, db_conn, tmp_path):
         assert item.repo_path == str(target_repo)
 
 
-def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
+def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path) -> None:
     """Test that -r works even when not in a git repo."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     target_repo = tmp_path / "standalone"
     target_repo.mkdir()
 
@@ -707,9 +709,9 @@ def test_todo_with_repo_option_no_git_required(runner, db_conn, tmp_path):
         assert "Created TODO #1" in result.output
 
 
-def test_edit_name_only(runner, db_conn):
+def test_edit_name_only(runner, db_conn) -> None:
     """Test editing just the name of a todo item."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -730,9 +732,9 @@ def test_edit_name_only(runner, db_conn):
         assert item.branch == "feat/x"
 
 
-def test_edit_branch_todo_item(runner, db_conn):
+def test_edit_branch_todo_item(runner, db_conn) -> None:
     """Test editing the branch of a todo item (no worktree)."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -752,9 +754,9 @@ def test_edit_branch_todo_item(runner, db_conn):
         assert item.branch == "feat/new"
 
 
-def test_edit_branch_active_item(runner, db_conn, tmp_path):
+def test_edit_branch_active_item(runner, db_conn, tmp_path) -> None:
     """Test editing branch on an active item renames the git branch."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_config = MagicMock()
     mock_config.base_dir = tmp_path / "worktrees"
@@ -808,9 +810,9 @@ def test_edit_branch_active_item(runner, db_conn, tmp_path):
         assert item.tmux_session == "myrepo-feat-new"
 
 
-def test_edit_branch_blocked_by_open_pr(runner, db_conn):
+def test_edit_branch_blocked_by_open_pr(runner, db_conn) -> None:
     """Test that editing branch is rejected when an open PR exists."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -830,9 +832,9 @@ def test_edit_branch_blocked_by_open_pr(runner, db_conn):
         assert "open PR" in result.output
 
 
-def test_edit_duplicate_branch(runner, db_conn):
+def test_edit_duplicate_branch(runner, db_conn) -> None:
     """Test that editing to a duplicate active branch is rejected."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
         patch(
@@ -848,27 +850,27 @@ def test_edit_duplicate_branch(runner, db_conn):
         assert "already used" in result.output
 
 
-def test_edit_no_options(runner, db_conn):
+def test_edit_no_options(runner, db_conn) -> None:
     """Test that edit requires at least --name or --branch."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     with patch("womtrees.db.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["edit", "1"])
         assert result.exit_code != 0
         assert "Provide --name, --branch, and/or --prompt" in result.output
 
 
-def test_edit_nonexistent(runner, db_conn):
+def test_edit_nonexistent(runner, db_conn) -> None:
     """Test editing a non-existent item."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     with patch("womtrees.db.get_connection", get_conn_fn):
         result = runner.invoke(cli, ["edit", "999", "--name", "test"])
         assert result.exit_code != 0
         assert "not found" in result.output
 
 
-def test_create_with_repo_option(runner, db_conn, tmp_path):
+def test_create_with_repo_option(runner, db_conn, tmp_path) -> None:
     """Test that create command also accepts -r option."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
     target_repo = tmp_path / "another-project"
     target_repo.mkdir()
 
@@ -908,7 +910,7 @@ def test_create_with_repo_option(runner, db_conn, tmp_path):
         assert item.repo_path == str(target_repo)
 
 
-def test_cd_tree_default(runner, tmp_path):
+def test_cd_tree_default(runner, tmp_path) -> None:
     """Cd with no flags prints worktree toplevel."""
     mock_result = MagicMock()
     mock_result.stdout = f"{tmp_path}/my-worktree\n"
@@ -920,7 +922,7 @@ def test_cd_tree_default(runner, tmp_path):
         assert result.output.strip() == f"{tmp_path}/my-worktree"
 
 
-def test_cd_root(runner, tmp_path):
+def test_cd_root(runner, tmp_path) -> None:
     """Cd --root prints the main repository root."""
     with patch(
         "womtrees.worktree.get_current_repo",
@@ -931,7 +933,7 @@ def test_cd_root(runner, tmp_path):
         assert result.output.strip() == str(tmp_path / "myrepo")
 
 
-def test_cd_root_not_in_repo(runner):
+def test_cd_root_not_in_repo(runner) -> None:
     """Cd --root outside a git repo fails."""
     with patch("womtrees.worktree.get_current_repo", return_value=None):
         result = runner.invoke(cli, ["cd", "--root"])
@@ -939,7 +941,7 @@ def test_cd_root_not_in_repo(runner):
         assert "Not inside a git repository" in result.output
 
 
-def test_cd_tree_not_in_repo(runner):
+def test_cd_tree_not_in_repo(runner) -> None:
     """Cd --tree outside a git repo fails."""
     with patch(
         "subprocess.run",

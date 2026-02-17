@@ -43,9 +43,9 @@ def db_conn(tmp_path):
     return _get_conn, db_path
 
 
-def test_hook_heartbeat_creates_session(runner, db_conn):
+def test_hook_heartbeat_creates_session(runner, db_conn) -> None:
     """Test that heartbeat creates a new Claude session."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_context = {
         "tmux_session": "myrepo/feat-auth",
@@ -74,9 +74,9 @@ def test_hook_heartbeat_creates_session(runner, db_conn):
     assert sessions[0].work_item_id is None
 
 
-def test_hook_heartbeat_updates_existing(runner, db_conn):
+def test_hook_heartbeat_updates_existing(runner, db_conn) -> None:
     """Test that heartbeat updates an existing session."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     # Pre-create a session
     conn = get_conn_fn()
@@ -115,9 +115,9 @@ def test_hook_heartbeat_updates_existing(runner, db_conn):
     assert sessions[0].state == "working"
 
 
-def test_hook_stop_sets_done(runner, db_conn):
+def test_hook_stop_sets_done(runner, db_conn) -> None:
     """Test that stop hook sets session to done."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_context = {
         "tmux_session": "myrepo/feat-auth",
@@ -142,9 +142,9 @@ def test_hook_stop_sets_done(runner, db_conn):
     assert sessions[0].state == "done"
 
 
-def test_hook_input_sets_waiting(runner, db_conn):
+def test_hook_input_sets_waiting(runner, db_conn) -> None:
     """Test that input hook sets session to waiting."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_context = {
         "tmux_session": "myrepo/feat-auth",
@@ -169,9 +169,9 @@ def test_hook_input_sets_waiting(runner, db_conn):
     assert sessions[0].state == "waiting"
 
 
-def test_hook_heartbeat_with_work_item(runner, db_conn):
+def test_hook_heartbeat_with_work_item(runner, db_conn) -> None:
     """Test that heartbeat links to a work item when env var is present."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     # Create a work item
     conn = get_conn_fn()
@@ -200,9 +200,9 @@ def test_hook_heartbeat_with_work_item(runner, db_conn):
     assert sessions[0].work_item_id == item.id
 
 
-def test_hook_heartbeat_silent_without_tmux(runner, db_conn):
+def test_hook_heartbeat_silent_without_tmux(runner, db_conn) -> None:
     """Test that heartbeat exits silently when not in tmux."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_context = {
         "tmux_session": None,
@@ -227,9 +227,9 @@ def test_hook_heartbeat_silent_without_tmux(runner, db_conn):
     assert len(sessions) == 0
 
 
-def test_hook_mark_done(runner, db_conn):
+def test_hook_mark_done(runner, db_conn) -> None:
     """Test marking a session as done."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     session = create_claude_session(
@@ -251,9 +251,9 @@ def test_hook_mark_done(runner, db_conn):
     assert updated.state == "done"
 
 
-def test_sessions_command(runner, db_conn):
+def test_sessions_command(runner, db_conn) -> None:
     """Test wt sessions lists Claude sessions."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     create_claude_session(
@@ -285,9 +285,9 @@ def test_sessions_command(runner, db_conn):
         assert "waiting" in result.output
 
 
-def test_sessions_empty(runner, db_conn):
+def test_sessions_empty(runner, db_conn) -> None:
     """Test wt sessions when no sessions exist."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     with (
         patch("womtrees.db.get_connection", get_conn_fn),
@@ -297,7 +297,7 @@ def test_sessions_empty(runner, db_conn):
         assert "No Claude sessions found" in result.output
 
 
-def test_hook_install_command(runner, tmp_path):
+def test_hook_install_command(runner, tmp_path) -> None:
     """Test wt hook install installs Claude Code hooks."""
     with patch("womtrees.claude.install_global_hooks") as mock_install:
         result = runner.invoke(cli, ["hook", "install"])
@@ -306,9 +306,9 @@ def test_hook_install_command(runner, tmp_path):
         mock_install.assert_called_once()
 
 
-def test_hook_heartbeat_moves_item_to_working(runner, db_conn):
+def test_hook_heartbeat_moves_item_to_working(runner, db_conn) -> None:
     """Test that heartbeat moves a linked work item to working status."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
@@ -346,9 +346,9 @@ def test_hook_heartbeat_moves_item_to_working(runner, db_conn):
     assert updated.status == "working"
 
 
-def test_hook_input_moves_item_to_input(runner, db_conn):
+def test_hook_input_moves_item_to_input(runner, db_conn) -> None:
     """Test that input hook moves a linked work item to input status."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
@@ -386,9 +386,9 @@ def test_hook_input_moves_item_to_input(runner, db_conn):
     assert updated.status == "input"
 
 
-def test_hook_stop_moves_item_to_review(runner, db_conn):
+def test_hook_stop_moves_item_to_review(runner, db_conn) -> None:
     """Test that stop hook moves a linked work item to review status."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
@@ -426,9 +426,9 @@ def test_hook_stop_moves_item_to_review(runner, db_conn):
     assert updated.status == "review"
 
 
-def test_hook_skips_todo_items(runner, db_conn):
+def test_hook_skips_todo_items(runner, db_conn) -> None:
     """Test that hooks don't transition items in TODO status."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
@@ -466,9 +466,9 @@ def test_hook_skips_todo_items(runner, db_conn):
     assert updated.status == "todo"
 
 
-def test_hook_skips_done_items(runner, db_conn):
+def test_hook_skips_done_items(runner, db_conn) -> None:
     """Test that hooks don't transition items in DONE status."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     conn = get_conn_fn()
     item = create_work_item(conn, "myrepo", "/tmp/myrepo", "feat/auth")
@@ -506,9 +506,9 @@ def test_hook_skips_done_items(runner, db_conn):
     assert updated.status == "done"
 
 
-def test_hook_heartbeat_captures_session_id(runner, db_conn):
+def test_hook_heartbeat_captures_session_id(runner, db_conn) -> None:
     """Test that heartbeat reads Claude session_id from stdin."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_context = {
         "tmux_session": "s1",
@@ -537,9 +537,9 @@ def test_hook_heartbeat_captures_session_id(runner, db_conn):
     assert sessions[0].claude_session_id == "abc-123-def"
 
 
-def test_hook_heartbeat_updates_session_id(runner, db_conn):
+def test_hook_heartbeat_updates_session_id(runner, db_conn) -> None:
     """Test that heartbeat updates claude_session_id on existing sessions."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     # Pre-create a session without claude_session_id
     conn = get_conn_fn()
@@ -581,9 +581,9 @@ def test_hook_heartbeat_updates_session_id(runner, db_conn):
     assert sessions[0].claude_session_id == "new-uuid-456"
 
 
-def test_hook_heartbeat_no_stdin(runner, db_conn):
+def test_hook_heartbeat_no_stdin(runner, db_conn) -> None:
     """Test that heartbeat works without stdin (no session_id captured)."""
-    get_conn_fn, db_path = db_conn
+    get_conn_fn, _db_path = db_conn
 
     mock_context = {
         "tmux_session": "s1",

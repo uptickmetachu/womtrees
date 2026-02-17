@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from click.testing import CliRunner
@@ -9,6 +9,9 @@ from click.testing import CliRunner
 from womtrees.claude import configure_tmux_status_bar
 from womtrees.cli import cli
 from womtrees.db import _ensure_schema, create_claude_session
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _make_conn(tmp_path: Path):
@@ -27,7 +30,7 @@ def _make_conn(tmp_path: Path):
 # -- wt status --tmux tests --
 
 
-def test_status_tmux_no_waiting(tmp_path):
+def test_status_tmux_no_waiting(tmp_path) -> None:
     get_conn = _make_conn(tmp_path)
     runner = CliRunner()
 
@@ -38,7 +41,7 @@ def test_status_tmux_no_waiting(tmp_path):
     assert result.output.strip() == "wt: 0"
 
 
-def test_status_tmux_one_waiting(tmp_path):
+def test_status_tmux_one_waiting(tmp_path) -> None:
     get_conn = _make_conn(tmp_path)
     conn = get_conn()
     create_claude_session(
@@ -61,7 +64,7 @@ def test_status_tmux_one_waiting(tmp_path):
     assert "fix/auth" in result.output
 
 
-def test_status_tmux_multiple_waiting(tmp_path):
+def test_status_tmux_multiple_waiting(tmp_path) -> None:
     get_conn = _make_conn(tmp_path)
     conn = get_conn()
     for branch in ["fix/auth", "feat/api", "refactor/db"]:
@@ -84,7 +87,7 @@ def test_status_tmux_multiple_waiting(tmp_path):
     assert "3 waiting" in result.output
 
 
-def test_status_tmux_ignores_working_sessions(tmp_path):
+def test_status_tmux_ignores_working_sessions(tmp_path) -> None:
     get_conn = _make_conn(tmp_path)
     conn = get_conn()
     create_claude_session(
@@ -109,7 +112,7 @@ def test_status_tmux_ignores_working_sessions(tmp_path):
 # -- configure_tmux_status_bar tests --
 
 
-def test_configure_tmux_fresh(tmp_path):
+def test_configure_tmux_fresh(tmp_path) -> None:
     conf = tmp_path / ".tmux.conf"
 
     with patch("womtrees.claude.TMUX_CONF", conf), patch("subprocess.run"):
@@ -121,7 +124,7 @@ def test_configure_tmux_fresh(tmp_path):
     assert "status-interval 5" in content
 
 
-def test_configure_tmux_idempotent(tmp_path):
+def test_configure_tmux_idempotent(tmp_path) -> None:
     conf = tmp_path / ".tmux.conf"
     conf.write_text('set -g status-right "#(wt status --tmux) | %H:%M"\n')
 
@@ -131,7 +134,7 @@ def test_configure_tmux_idempotent(tmp_path):
     assert result is False
 
 
-def test_configure_tmux_preserves_existing(tmp_path):
+def test_configure_tmux_preserves_existing(tmp_path) -> None:
     conf = tmp_path / ".tmux.conf"
     conf.write_text("set -g mouse on\nbind r source-file ~/.tmux.conf\n")
 
@@ -144,7 +147,7 @@ def test_configure_tmux_preserves_existing(tmp_path):
     assert "wt status --tmux" in content
 
 
-def test_configure_tmux_comments_out_existing_status_right(tmp_path):
+def test_configure_tmux_comments_out_existing_status_right(tmp_path) -> None:
     conf = tmp_path / ".tmux.conf"
     conf.write_text('set -g status-right "%H:%M"\nset -g status-interval 15\n')
 

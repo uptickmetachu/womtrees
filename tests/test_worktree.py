@@ -15,7 +15,7 @@ from womtrees.worktree import (
 )
 
 
-def test_sanitize_branch_name():
+def test_sanitize_branch_name() -> None:
     assert sanitize_branch_name("feat/auth") == "feat-auth"
     assert sanitize_branch_name("fix/bug-123") == "fix-bug-123"
     assert sanitize_branch_name("simple") == "simple"
@@ -23,7 +23,7 @@ def test_sanitize_branch_name():
     assert sanitize_branch_name("has spaces!@#") == "hasspaces"
 
 
-def test_get_current_repo(tmp_path, monkeypatch):
+def test_get_current_repo(tmp_path, monkeypatch) -> None:
     # Create a git repo
     subprocess.run(["git", "init", str(tmp_path)], check=True, capture_output=True)
     subprocess.run(
@@ -40,7 +40,7 @@ def test_get_current_repo(tmp_path, monkeypatch):
     assert repo_path == str(tmp_path)
 
 
-def test_get_current_repo_not_git(tmp_path, monkeypatch):
+def test_get_current_repo_not_git(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     assert get_current_repo() is None
 
@@ -48,7 +48,7 @@ def test_get_current_repo_not_git(tmp_path, monkeypatch):
 # -- .womtrees.toml config loading --
 
 
-def test_load_womtrees_config(tmp_path):
+def test_load_womtrees_config(tmp_path) -> None:
     (tmp_path / ".womtrees.toml").write_text(
         '[scripts]\nsetup = ["echo hello"]\n\n[copy]\nfiles = [".env"]\n',
     )
@@ -59,11 +59,11 @@ def test_load_womtrees_config(tmp_path):
     assert result["copy"]["files"] == [".env"]
 
 
-def test_load_womtrees_config_missing(tmp_path):
+def test_load_womtrees_config_missing(tmp_path) -> None:
     assert load_womtrees_config(str(tmp_path)) is None
 
 
-def test_load_womtrees_config_local_override(tmp_path):
+def test_load_womtrees_config_local_override(tmp_path) -> None:
     (tmp_path / ".womtrees.toml").write_text(
         '[scripts]\nsetup = ["npm install"]\nteardown = ["docker-compose down"]\n',
     )
@@ -79,7 +79,7 @@ def test_load_womtrees_config_local_override(tmp_path):
     assert "teardown" not in result["scripts"]
 
 
-def test_load_womtrees_config_local_only(tmp_path):
+def test_load_womtrees_config_local_only(tmp_path) -> None:
     (tmp_path / ".womtrees.local.toml").write_text(
         '[scripts]\nsetup = ["echo local"]\n',
     )
@@ -106,7 +106,7 @@ def git_repo(tmp_path):
     return repo_path
 
 
-def test_create_and_remove_worktree(git_repo, tmp_path):
+def test_create_and_remove_worktree(git_repo, tmp_path) -> None:
     base_dir = tmp_path / "worktrees"
     wt_path = create_worktree(str(git_repo), "feat/test", base_dir)
 
@@ -118,7 +118,7 @@ def test_create_and_remove_worktree(git_repo, tmp_path):
     assert not wt_path.exists()
 
 
-def test_create_worktree_with_setup(git_repo, tmp_path):
+def test_create_worktree_with_setup(git_repo, tmp_path) -> None:
     # Create a file in the source repo to copy
     (git_repo / ".env").write_text("SECRET=123")
 
@@ -140,7 +140,7 @@ def test_create_worktree_with_setup(git_repo, tmp_path):
     remove_worktree(wt_path)
 
 
-def test_create_worktree_setup_failure_rolls_back(git_repo, tmp_path):
+def test_create_worktree_setup_failure_rolls_back(git_repo, tmp_path) -> None:
     (git_repo / ".womtrees.toml").write_text('[scripts]\nsetup = ["exit 1"]\n')
 
     base_dir = tmp_path / "worktrees"
@@ -161,7 +161,7 @@ def test_create_worktree_setup_failure_rolls_back(git_repo, tmp_path):
     exc_info.value.log_path.unlink()
 
 
-def test_setup_success_cleans_log(git_repo, tmp_path):
+def test_setup_success_cleans_log(git_repo, tmp_path) -> None:
     (git_repo / ".womtrees.toml").write_text('[scripts]\nsetup = ["echo ok"]\n')
 
     base_dir = tmp_path / "worktrees"
@@ -179,7 +179,7 @@ def test_setup_success_cleans_log(git_repo, tmp_path):
 # -- Teardown scripts --
 
 
-def test_remove_worktree_with_teardown(git_repo, tmp_path):
+def test_remove_worktree_with_teardown(git_repo, tmp_path) -> None:
     (git_repo / ".womtrees.toml").write_text(
         '[scripts]\nteardown = ["echo teardown_ran > /tmp/womtrees-test-teardown-marker"]\n',
     )
@@ -198,7 +198,7 @@ def test_remove_worktree_with_teardown(git_repo, tmp_path):
     marker.unlink()
 
 
-def test_remove_worktree_teardown_failure_still_removes(git_repo, tmp_path):
+def test_remove_worktree_teardown_failure_still_removes(git_repo, tmp_path) -> None:
     (git_repo / ".womtrees.toml").write_text('[scripts]\nteardown = ["exit 1"]\n')
 
     base_dir = tmp_path / "worktrees"

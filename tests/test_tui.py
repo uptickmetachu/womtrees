@@ -76,32 +76,32 @@ def _make_session(
 
 
 class TestTimeAgo:
-    def test_recent(self):
+    def test_recent(self) -> None:
         now = datetime.now(UTC).isoformat()
         assert _time_ago(now) == "<1m"
 
-    def test_minutes(self):
+    def test_minutes(self) -> None:
         from datetime import timedelta
 
         t = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
         assert _time_ago(t) == "30m"
 
-    def test_hours(self):
+    def test_hours(self) -> None:
         from datetime import timedelta
 
         t = (datetime.now(UTC) - timedelta(hours=5)).isoformat()
         assert _time_ago(t) == "5h"
 
-    def test_days(self):
+    def test_days(self) -> None:
         from datetime import timedelta
 
         t = (datetime.now(UTC) - timedelta(days=3)).isoformat()
         assert _time_ago(t) == "3d"
 
-    def test_invalid(self):
+    def test_invalid(self) -> None:
         assert _time_ago("not-a-date") == "?"
 
-    def test_none(self):
+    def test_none(self) -> None:
         assert _time_ago(None) == "?"
 
 
@@ -109,13 +109,13 @@ class TestTimeAgo:
 
 
 class TestClaudeStateMapping:
-    def test_working_maps_to_working(self):
+    def test_working_maps_to_working(self) -> None:
         assert CLAUDE_STATE_TO_STATUS["working"] == "working"
 
-    def test_waiting_maps_to_input(self):
+    def test_waiting_maps_to_input(self) -> None:
         assert CLAUDE_STATE_TO_STATUS["waiting"] == "input"
 
-    def test_done_maps_to_review(self):
+    def test_done_maps_to_review(self) -> None:
         assert CLAUDE_STATE_TO_STATUS["done"] == "review"
 
 
@@ -126,7 +126,7 @@ class TestCheckRefresh:
     """Tests for the DB-mtime-based refresh trigger."""
 
     @pytest.mark.asyncio
-    async def test_skips_when_db_missing(self):
+    async def test_skips_when_db_missing(self) -> None:
         """_check_refresh does nothing when DB file doesn't exist."""
         from womtrees.tui.app import WomtreesApp
 
@@ -145,7 +145,7 @@ class TestCheckRefresh:
                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]),
             ):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     # Point at a nonexistent file
                     from pathlib import Path
 
@@ -156,7 +156,7 @@ class TestCheckRefresh:
                     assert mock_conn.call_count == call_count_before
 
     @pytest.mark.asyncio
-    async def test_skips_when_mtime_unchanged(self, tmp_path):
+    async def test_skips_when_mtime_unchanged(self, tmp_path) -> None:
         """_check_refresh skips refresh when mtime hasn't changed."""
         from womtrees.tui.app import WomtreesApp
 
@@ -178,7 +178,7 @@ class TestCheckRefresh:
                 patch("womtrees.tui.app.list_claude_sessions", return_value=[]),
             ):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     app._db_path = db_file
                     app._last_db_mtime = db_file.stat().st_mtime
                     call_count_before = mock_conn.call_count
@@ -187,7 +187,7 @@ class TestCheckRefresh:
                     assert mock_conn.call_count == call_count_before
 
     @pytest.mark.asyncio
-    async def test_refreshes_when_mtime_changes(self, tmp_path):
+    async def test_refreshes_when_mtime_changes(self, tmp_path) -> None:
         """_check_refresh triggers refresh when mtime changes."""
         import os
 
@@ -230,7 +230,7 @@ class TestCheckRefresh:
 
 
 @pytest.mark.asyncio
-async def test_app_mounts():
+async def test_app_mounts() -> None:
     """App should mount with board, status bar, header, and footer."""
     from womtrees.tui.app import WomtreesApp
 
@@ -247,7 +247,7 @@ async def test_app_mounts():
         with patch("womtrees.tui.app.list_work_items", return_value=[]):
             with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     board = app.query_one("#board", KanbanBoard)
                     assert board is not None
                     assert len(board.columns) == 4
@@ -260,7 +260,7 @@ async def test_app_mounts():
 
 
 @pytest.mark.asyncio
-async def test_app_shows_items():
+async def test_app_shows_items() -> None:
     """Items should appear in the correct columns."""
     from womtrees.tui.app import WomtreesApp
 
@@ -283,7 +283,7 @@ async def test_app_shows_items():
         with patch("womtrees.tui.app.list_work_items", return_value=items):
             with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     board = app.query_one("#board", KanbanBoard)
                     todo_cards = board.columns["todo"].get_focusable_cards()
                     working_cards = board.columns["working"].get_focusable_cards()
@@ -294,7 +294,7 @@ async def test_app_shows_items():
 
 
 @pytest.mark.asyncio
-async def test_app_unmanaged_sessions():
+async def test_app_unmanaged_sessions() -> None:
     """Unmanaged sessions should show in the working column."""
     from womtrees.tui.app import WomtreesApp
 
@@ -315,14 +315,14 @@ async def test_app_unmanaged_sessions():
         with patch("womtrees.tui.app.list_work_items", return_value=[]):
             with patch("womtrees.tui.app.list_claude_sessions", return_value=sessions):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     board = app.query_one("#board", KanbanBoard)
                     working_cards = board.columns["working"].get_focusable_cards()
                     assert any(isinstance(c, UnmanagedCard) for c in working_cards)
 
 
 @pytest.mark.asyncio
-async def test_app_toggle_grouping():
+async def test_app_toggle_grouping() -> None:
     """action_toggle_grouping should toggle grouping (available via command palette)."""
     from womtrees.tui.app import WomtreesApp
 
@@ -339,7 +339,7 @@ async def test_app_toggle_grouping():
         with patch("womtrees.tui.app.list_work_items", return_value=[]):
             with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     assert app.group_by_repo is True
                     app.action_toggle_grouping()
                     assert app.group_by_repo is False
@@ -348,7 +348,7 @@ async def test_app_toggle_grouping():
 
 
 @pytest.mark.asyncio
-async def test_app_status_bar():
+async def test_app_status_bar() -> None:
     """Status bar should show item counts."""
     from textual.widgets import Static
 
@@ -373,7 +373,7 @@ async def test_app_status_bar():
         with patch("womtrees.tui.app.list_work_items", return_value=items):
             with patch("womtrees.tui.app.list_claude_sessions", return_value=[]):
                 app = WomtreesApp()
-                async with app.run_test(size=(120, 40)) as pilot:
+                async with app.run_test(size=(120, 40)):
                     status = app.query_one("#status-counts", Static)
                     text = status.content
                     assert "2 todo" in text
@@ -382,7 +382,7 @@ async def test_app_status_bar():
 
 
 @pytest.mark.asyncio
-async def test_app_column_navigation():
+async def test_app_column_navigation() -> None:
     """h/l keys should navigate between columns with cards."""
     from womtrees.tui.app import WomtreesApp
 
@@ -420,7 +420,7 @@ async def test_app_column_navigation():
 
 
 @pytest.mark.asyncio
-async def test_app_help_dialog():
+async def test_app_help_dialog() -> None:
     """Pressing ? should open help dialog."""
     from womtrees.tui.app import WomtreesApp
 
