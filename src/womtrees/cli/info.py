@@ -317,13 +317,13 @@ def cd_cmd(mode: str) -> None:
     else:
         # --tree (default): worktree top-level
         try:
-            result = _sp.run(
+            proc = _sp.run(
                 ["git", "rev-parse", "--show-toplevel"],
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            click.echo(result.stdout.strip())
+            click.echo(proc.stdout.strip())
         except _sp.CalledProcessError:
             raise click.ClickException("Not inside a git repository.")
 
