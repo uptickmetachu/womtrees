@@ -5,10 +5,13 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from womtrees.diff import (
+    MAX_DIFF_LINES,
+    MAX_FILE_SIZE,
     DiffFile,
     DiffLine,
     ReviewComment,
     _highlight_lines,
+    _is_binary,
     _parse_unified_diff,
     compute_diff_for_file,
     list_changed_files,
@@ -134,3 +137,93 @@ def test_review_comment_dataclass():
     assert c.start_line == 5
     assert c.end_line == 10
     assert c.comment_text == "Fix this"
+
+
+# -- Binary / large file filtering tests --
+
+
+def test_is_binary_detects_null_bytes():
+    """Binary detection via null bytes in strings and bytes."""
+    assert _is_binary("hello\x00world") is True
+    assert _is_binary(b"hello\x00world") is True
+    assert _is_binary("hello world") is False
+    assert _is_binary(b"hello world") is False
+
+
+def test_compute_diff_skips_binary_old_file():
+    """Diff returns empty lines when old file is binary."""
+    binary_content = "binary\x00content"
+    new_content = "clean text\n"
+
+    def mock_git(repo, *args):
+        cmd = args[0] if args else ""
+        if cmd == "show":
+            ref_path = args[1]
+            if ref_path.startswith("base:"):
+                return binary_content
+            return new_content
+        return ""
+
+    with patch("womtrees.diff._git", side_effect=mock_git):
+        result = compute_diff_for_file("/repo", "test.bin", "base", "target")
+
+    assert result.lines == []
+
+
+def test_compute_diff_skips_binary_new_file():
+    """Diff returns empty lines when new file is binary."""
+    old_content = "clean text\n"
+    binary_content = "binary\x00content"
+
+    def mock_git(repo, *args):
+        cmd = args[0] if args else ""
+        if cmd == "show":
+            ref_path = args[1]
+            if ref_path.startswith("base:"):
+                return old_content
+            return binary_content
+        return ""
+
+    with patch("womtrees.diff._git", side_effect=mock_git):
+        result = compute_diff_for_file("/repo", "test.bin", "base", "target")
+
+    assert result.lines == []
+
+
+def test_compute_diff_skips_oversized_file():
+    """Diff returns empty lines when file exceeds MAX_FILE_SIZE."""
+    big_content = "x" * (MAX_FILE_SIZE + 1)
+
+    def mock_git(repo, *args):
+        cmd = args[0] if args else ""
+        if cmd == "show":
+            return big_content
+        return ""
+
+    with patch("womtrees.diff._git", side_effect=mock_git):
+        result = compute_diff_for_file("/repo", "big.txt", "base", "target")
+
+    assert result.lines == []
+
+
+def test_compute_diff_skips_oversized_diff():
+    """Diff returns empty lines when unified diff exceeds MAX_DIFF_LINES."""
+    # Generate enough lines to exceed the limit
+    old_lines = [f"old_line_{i}\n" for i in range(MAX_DIFF_LINES)]
+    new_lines = [f"new_line_{i}\n" for i in range(MAX_DIFF_LINES)]
+    old_content = "".join(old_lines)
+    new_content = "".join(new_lines)
+
+    def mock_git(repo, *args):
+        cmd = args[0] if args else ""
+        if cmd == "show":
+            ref_path = args[1]
+            if ref_path.startswith("base:"):
+                return old_content
+            return new_content
+        return ""
+
+    with patch("womtrees.diff._git", side_effect=mock_git):
+        result = compute_diff_for_file("/repo", "huge.txt", "base", "target")
+
+    assert result.lines == []

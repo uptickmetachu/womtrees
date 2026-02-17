@@ -56,6 +56,18 @@ class ReviewComment:
     diff_content: str = ""  # joined plain_text of commented DiffLines (content anchor)
 
 
+# Limits for skipping oversized / binary files
+MAX_FILE_SIZE = 512 * 1024  # 512 KB
+MAX_DIFF_LINES = 5000
+
+
+def _is_binary(data: str | bytes) -> bool:
+    """Return True if data looks like binary content (contains null bytes)."""
+    if isinstance(data, str):
+        return "\x00" in data
+    return b"\x00" in data
+
+
 def _git(repo_path: str, *args: str) -> str:
     """Run a git command and return stdout. Raises on failure."""
     result = subprocess.run(
@@ -65,6 +77,55 @@ def _git(repo_path: str, *args: str) -> str:
         check=True,
     )
     return result.stdout
+
+
+def _should_skip_file(
+    repo_path: str,
+    file_path: str,
+    base_ref: str,
+    *,
+    uncommitted: bool = False,
+) -> bool:
+    """Return True if a file should be skipped (binary or too large).
+
+    Checks the working-tree copy and the base-ref copy. Errs on the side
+    of skipping — if we can't read a file we leave it in the list so
+    compute_diff_for_file can handle it gracefully.
+    """
+    disk_path = Path(repo_path) / file_path
+
+    # Check working-tree copy
+    if disk_path.exists():
+        try:
+            size = disk_path.stat().st_size
+            if size > MAX_FILE_SIZE:
+                return True
+            with open(disk_path, "rb") as f:
+                chunk = f.read(8192)
+            if b"\x00" in chunk:
+                return True
+        except OSError:
+            pass
+
+    # Check base-ref copy (size then binary)
+    try:
+        output = _git(repo_path, "cat-file", "-s", f"{base_ref}:{file_path}")
+        if int(output.strip()) > MAX_FILE_SIZE:
+            return True
+    except (subprocess.CalledProcessError, ValueError):
+        pass
+
+    try:
+        raw = subprocess.run(
+            ["git", "-C", repo_path, "cat-file", "blob", f"{base_ref}:{file_path}"],
+            capture_output=True,
+        )
+        if b"\x00" in raw.stdout[:8192]:
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 def list_changed_files(repo_path: str, base: str, target: str) -> list[str]:
@@ -239,15 +300,29 @@ def compute_diff_for_file(
     """Compute diff for a single file between two refs.
 
     If uncommitted=True, target_ref is ignored and the working tree is used.
+    Returns an empty DiffFile for binary files, files exceeding MAX_FILE_SIZE,
+    or diffs exceeding MAX_DIFF_LINES.
     """
     language = _detect_language(file_path)
+    empty = DiffFile(path=file_path, language=language)
 
     old_text = get_file_at_ref(repo_path, base_ref, file_path) or ""
     if uncommitted:
         wt_path = Path(repo_path) / file_path
-        new_text = wt_path.read_text() if wt_path.exists() else ""
+        try:
+            new_text = wt_path.read_text() if wt_path.exists() else ""
+        except UnicodeDecodeError:
+            return empty  # binary file
     else:
         new_text = get_file_at_ref(repo_path, target_ref, file_path) or ""
+
+    # Skip binary content
+    if _is_binary(old_text) or _is_binary(new_text):
+        return empty
+
+    # Skip oversized files
+    if len(old_text) > MAX_FILE_SIZE or len(new_text) > MAX_FILE_SIZE:
+        return empty
 
     old_lines = old_text.splitlines(keepends=True)
     new_lines = new_text.splitlines(keepends=True)
@@ -264,6 +339,10 @@ def compute_diff_for_file(
             lineterm="",
         )
     )
+
+    # Skip oversized diffs
+    if len(unified) > MAX_DIFF_LINES:
+        return empty
 
     diff_lines = _parse_unified_diff(unified, old_highlighted, new_highlighted)
     return DiffFile(path=file_path, language=language, lines=diff_lines)
@@ -308,7 +387,11 @@ def list_diff_files(
         label_target = "working tree"
         actual_base = base_ref
 
-    diff_files = [DiffFile(path=f, language=_detect_language(f)) for f in files]
+    diff_files = [
+        DiffFile(path=f, language=_detect_language(f))
+        for f in files
+        if not _should_skip_file(repo_path, f, actual_base, uncommitted=uncommitted)
+    ]
 
     return DiffResult(
         files=diff_files,
