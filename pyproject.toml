@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click",
     "claude-agent-sdk",
+    "pygments",
     "textual",
 ]
 
@@ -28,6 +29,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff>=0.15.1",
+    "types-pygments>=2.19.0.20251121",
 ]
 
 [tool.ruff]

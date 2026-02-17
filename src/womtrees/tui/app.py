@@ -82,6 +82,7 @@ class WomtreesApp(App[None]):
         Binding("g", "git_actions", "Git", show=True),
         Binding("e", "edit_item", "Edit", show=True),
         Binding("d", "delete_item", "Delete", show=True),
+        Binding("r", "review_diff", "Review diff", show=True),
     ]
 
     _DEBOUNCE_SECONDS = 1.0
@@ -1018,6 +1019,30 @@ class WomtreesApp(App[None]):
         label = "on" if self.group_by_repo else "off"
         self.notify(f"Repo grouping: {label}")
         self._refresh_board()
+
+    def action_review_diff(self) -> None:
+        """Launch the diff review TUI for the focused work item."""
+        card = self._get_focused_card()
+        if not isinstance(card, WorkItemCard):
+            return
+        item = card.work_item
+        if item.status == "todo":
+            self.notify("Cannot review diff for TODO items", severity="warning")
+            return
+        if not item.worktree_path and not item.repo_path:
+            self.notify("No repo path available", severity="error")
+            return
+
+        repo_path = item.worktree_path or item.repo_path
+
+        from womtrees.diff import compute_diff
+
+        diff_result = compute_diff(repo_path)
+
+        from womtrees.tui.diff_app import DiffApp
+
+        with self.suspend():
+            DiffApp(diff_result=diff_result, repo_path=repo_path).run()
 
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
