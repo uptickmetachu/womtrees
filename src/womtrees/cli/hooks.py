@@ -71,6 +71,7 @@ def _handle_hook(session_state: str, item_status: str) -> None:
     import sys
 
     from womtrees.claude import detect_context
+    from womtrees.sound import play_notification
 
     ctx = detect_context()
 
@@ -117,4 +118,9 @@ def _handle_hook(session_state: str, item_status: str) -> None:
         if work_item_id is not None:
             item = get_work_item(conn, work_item_id)
             if item and item.status not in ("todo", "done"):
+                old_status = item.status
                 update_work_item(conn, work_item_id, status=item_status)
+
+                # Play notification when transitioning to input or review
+                if item_status in ("input", "review") and old_status != item_status:
+                    play_notification(state=item_status)

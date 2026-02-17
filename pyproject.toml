@@ -21,6 +21,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/womtrees"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/womtrees/sounds/notification.wav" = "womtrees/sounds/notification.wav"
+"src/womtrees/sounds/nudge.wav" = "womtrees/sounds/nudge.wav"
+"src/womtrees/sounds/triplet.wav" = "womtrees/sounds/triplet.wav"
+"src/womtrees/sounds/warble.wav" = "womtrees/sounds/warble.wav"
+
 [dependency-groups]
 dev = [
     "commitizen>=3.13.0",

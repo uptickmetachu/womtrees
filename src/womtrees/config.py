@@ -24,6 +24,13 @@ claude_pane = "left"
 # e.g. "--dangerously-skip-permissions" to skip the trust-folder prompt.
 # args = "--dangerously-skip-permissions"
 
+[notifications]
+sound = true
+# Sound to play on input/review. Built-in: notification, nudge, triplet, warble
+# Or an absolute path to a .wav file.
+# input_sound = "triplet"
+# review_sound = "notification"
+
 # [pull_requests]
 # Prompt passed to `claude -p` when creating a PR from the TUI.
 # prompt = "/pr"
@@ -38,6 +45,9 @@ class Config:
     claude_args: str  # extra CLI args for claude
     branch_prefix: str  # prefix for auto-generated branch names
     pr_prompt: str  # prompt passed to `claude -p` for PR creation
+    sound_enabled: bool  # play sound on input/review transitions
+    sound_input: str  # sound name or path for input state
+    sound_review: str  # sound name or path for review state
 
     @classmethod
     def load(cls) -> Config:
@@ -62,6 +72,11 @@ class Config:
         pr_section = data.get("pull_requests", {})
         pr_prompt = pr_section.get("prompt", "/pr")
 
+        notifications = data.get("notifications", {})
+        sound_enabled = notifications.get("sound", True)
+        sound_input = notifications.get("input_sound", "triplet")
+        sound_review = notifications.get("review_sound", "notification")
+
         return cls(
             base_dir=base_dir,
             tmux_split=tmux_split,
@@ -69,6 +84,9 @@ class Config:
             claude_args=claude_args,
             branch_prefix=branch_prefix,
             pr_prompt=pr_prompt,
+            sound_enabled=sound_enabled,
+            sound_input=sound_input,
+            sound_review=sound_review,
         )
 
 
