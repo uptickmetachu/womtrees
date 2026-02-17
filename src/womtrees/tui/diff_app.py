@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
 from typing import Any
 
 from textual.app import App, ComposeResult
@@ -71,6 +73,7 @@ class DiffApp(App[None]):
         self._comments: list[ReviewComment] = []
         self._current_file_idx: int = 0
         self._uncommitted_mode: bool = diff_result.target_ref == "working tree"
+        self._poll_snapshot: tuple[str, tuple[tuple[str, float], ...]] = ("", ())
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -91,6 +94,8 @@ class DiffApp(App[None]):
 
         self.query_one("#diff-view", DiffView).focus()
         self._update_status()
+        self._poll_snapshot = self._take_snapshot()
+        self.set_interval(5, self._poll_for_changes)
 
     def on_key(self, event: Key) -> None:
         """Map j/k to tree navigation when tree is focused."""
@@ -434,13 +439,50 @@ class DiffApp(App[None]):
                     source_end=self._source_line_no_from_diff(df, end_idx),
                 )
 
-    # -- Mode cycling --
+    # -- Auto-refresh polling --
 
-    def action_cycle_mode(self) -> None:
-        """Toggle between uncommitted changes and branch diff."""
+    def _take_snapshot(
+        self,
+    ) -> tuple[str, tuple[tuple[str, float], ...]]:
+        """Capture HEAD rev + mtimes of files in the diff for change detection."""
+        try:
+            head = subprocess.run(
+                ["git", "-C", self._repo_path, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            head = ""
+
+        mtimes: list[tuple[str, float]] = []
+        for df in self._diff.files:
+            p = Path(self._repo_path) / df.path
+            try:
+                mtimes.append((df.path, p.stat().st_mtime))
+            except OSError:
+                mtimes.append((df.path, 0.0))
+
+        return (head, tuple(sorted(mtimes)))
+
+    def _poll_for_changes(self) -> None:
+        """Check for file/git changes and refresh if needed."""
+        new_snapshot = self._take_snapshot()
+        if new_snapshot == self._poll_snapshot:
+            return
+        self._poll_snapshot = new_snapshot
+        self._refresh_diff()
+
+    def _refresh_diff(self) -> None:
+        """Rebuild the diff in the current mode, remap comments, reload view."""
         from womtrees.diff import list_diff_files
 
-        self._uncommitted_mode = not self._uncommitted_mode
+        # Remember current file path and cursor to restore position
+        current_path: str | None = None
+        cursor_pos = 0
+        if self._diff.files and self._current_file_idx < len(self._diff.files):
+            current_path = self._diff.files[self._current_file_idx].path
+            cursor_pos = self.query_one("#diff-view", DiffView).cursor
 
         self._diff = list_diff_files(
             self._repo_path,
@@ -448,19 +490,40 @@ class DiffApp(App[None]):
             uncommitted=self._uncommitted_mode,
         )
 
-        # Remap comments to new diff positions (unmatched kept as-is)
         if self._comments:
             self._remap_comments()
 
+        # Restore file index by path
         self._current_file_idx = 0
+        if current_path:
+            for i, df in enumerate(self._diff.files):
+                if df.path == current_path:
+                    self._current_file_idx = i
+                    break
+
         self._reload_tree()
 
         if self._diff.files:
-            self._load_file(0)
+            self._load_file(self._current_file_idx)
+            # Restore cursor position
+            diff_view = self.query_one("#diff-view", DiffView)
+            count = len(self._diff.files[self._current_file_idx].lines)
+            diff_view._cursor_pos = min(cursor_pos, max(0, count - 1))
+            diff_view._line_cache.clear()
+            diff_view.refresh()
+            diff_view._scroll_to_cursor()
         else:
             self.query_one("#diff-view", DiffView).clear()
 
         self._update_status()
+
+    # -- Mode cycling --
+
+    def action_cycle_mode(self) -> None:
+        """Toggle between uncommitted changes and branch diff."""
+        self._uncommitted_mode = not self._uncommitted_mode
+        self._refresh_diff()
+        self._poll_snapshot = self._take_snapshot()
         label = "uncommitted" if self._uncommitted_mode else "branch"
         self.notify(f"Mode: {label} ({len(self._diff.files)} files)")
 
