@@ -10,7 +10,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.events import Key
-from textual.widgets import Footer, Header, Static, Tree
+from textual.widgets import Footer, Header, Input, Static, Tree
 
 from womtrees.diff import DiffFile, DiffResult, ReviewComment, compute_diff_for_file
 from womtrees.tui.diff_view import DiffView
@@ -41,6 +41,16 @@ class DiffApp(App[None]):
         padding: 0 1;
         background: $boost;
         color: $text-muted;
+    }
+
+    #search-bar {
+        dock: bottom;
+        height: 1;
+        display: none;
+    }
+
+    #search-bar.visible {
+        display: block;
     }
     """
 
@@ -80,6 +90,7 @@ class DiffApp(App[None]):
         with Horizontal(id="diff-layout"):
             yield Tree("Files", id="file-tree")
             yield DiffView(id="diff-view")
+        yield Input(placeholder="/search...", id="search-bar")
         yield Static("", id="diff-status")
         yield Footer()
 
@@ -98,7 +109,15 @@ class DiffApp(App[None]):
         self.set_interval(5, self._poll_for_changes)
 
     def on_key(self, event: Key) -> None:
-        """Map j/k to tree navigation when tree is focused."""
+        """Map j/k to tree navigation when tree is focused; handle search keys."""
+        # Search bar key handling
+        search_bar = self.query_one("#search-bar", Input)
+        if self.focused is search_bar:
+            if event.key == "escape":
+                self._dismiss_search_bar()
+                event.prevent_default()
+            return
+
         tree = self.query_one("#file-tree", Tree)
         if self.focused is tree or (self.focused and tree in self.focused.ancestors):
             if event.key == "j":
@@ -107,6 +126,48 @@ class DiffApp(App[None]):
             elif event.key == "k":
                 tree.action_cursor_up()
                 event.prevent_default()
+            return
+
+        # When diff view is focused, n/N navigate search if active
+        diff_view = self.query_one("#diff-view", DiffView)
+        if diff_view.has_search:
+            if event.key == "n":
+                diff_view.next_match()
+                self._update_status()
+                event.prevent_default()
+            elif event.key == "N":
+                diff_view.prev_match()
+                self._update_status()
+                event.prevent_default()
+            elif event.key == "escape":
+                diff_view.clear_search()
+                self._update_status()
+                event.prevent_default()
+
+    def on_diff_view_search_requested(self, event: DiffView.SearchRequested) -> None:
+        self._show_search_bar()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "search-bar":
+            term = event.value.strip()
+            diff_view = self.query_one("#diff-view", DiffView)
+            if term:
+                diff_view.set_search(term)
+            else:
+                diff_view.clear_search()
+            self._dismiss_search_bar()
+            self._update_status()
+
+    def _show_search_bar(self) -> None:
+        search_bar = self.query_one("#search-bar", Input)
+        search_bar.add_class("visible")
+        search_bar.value = ""
+        search_bar.focus()
+
+    def _dismiss_search_bar(self) -> None:
+        search_bar = self.query_one("#search-bar", Input)
+        search_bar.remove_class("visible")
+        self.query_one("#diff-view", DiffView).focus()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
         if event.node.data is not None:
@@ -148,6 +209,7 @@ class DiffApp(App[None]):
                 f"{len(self._comments)} comments | "
                 f"{f.path}:{pos}/{total} | "
                 f"{self._diff.base_ref}..{self._diff.target_ref}"
+                f"{diff_view.search_info}"
             )
         self.query_one("#diff-status", Static).update(status_text)
 
@@ -561,6 +623,7 @@ class DiffApp(App[None]):
     def action_help(self) -> None:
         self.notify(
             "j/k: navigate | ctrl+j/k: files | ]/[: hunks | m: cycle mode | "
+            "/: search | n/N: next/prev match | "
             "v: select | c: comment | e: edit | u: undo | x: delete | "
-            "n/N: nav comments | ctrl+c: copy | ctrl+x: clear | q: quit"
+            "ctrl+c: copy | ctrl+x: clear | q: quit"
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +24,8 @@ _BG_HUNK = "#1c1c1c"
 _BG_SELECTION = "#3a3a3a"
 _BG_COMMENT = "#2a2210"
 _BG_CURSOR = "#444444"
+_SEARCH_HIGHLIGHT = "black on yellow"
+_SEARCH_CURRENT = "black on #ff8800"
 
 # Gutter styling
 _GUTTER_STYLE = "dim"
@@ -58,6 +61,7 @@ class DiffView(ScrollView):
             show=False,
         ),
         Binding("e", "edit_comment", "Edit comment", show=False),
+        Binding("slash,forward_slash", "search", "Search", show=False),
     ]
 
     # -- Custom messages posted to parent app --
@@ -88,6 +92,9 @@ class DiffView(ScrollView):
     class EditCommentAtCursor(Message):
         """User pressed 'e' to edit comment at cursor."""
 
+    class SearchRequested(Message):
+        """User pressed '/' — wants to search."""
+
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._diff_file: DiffFile | None = None
@@ -96,6 +103,10 @@ class DiffView(ScrollView):
         self._file_comments: list[ReviewComment] = []
         self._commented_lines: set[int] = set()
         self._line_cache: LRUCache[tuple[object, ...], Strip] = LRUCache(2048)
+        # Search state
+        self._search_term: str = ""
+        self._search_matches: list[tuple[int, int]] = []  # (line_idx, col)
+        self._current_match: int = -1
 
     @property
     def cursor(self) -> int:
@@ -144,11 +155,17 @@ class DiffView(ScrollView):
         """End drag selection."""
         self.release_mouse()
 
+    @property
+    def has_search(self) -> bool:
+        """Return True if a search is active with matches."""
+        return bool(self._search_term and self._search_matches)
+
     def load_file(self, diff_file: DiffFile) -> None:
         """Load a new file's diff into the view."""
         self._diff_file = diff_file
         self._cursor_pos = 0
         self._selection_anchor = None
+        self._clear_search()
         self._invalidate()
         self.scroll_to(0, 0, animate=False)
 
@@ -205,6 +222,8 @@ class DiffView(ScrollView):
             self._cursor_pos == line_idx,
             sel,
             line_idx in self._commented_lines,
+            self._search_term,
+            self._current_match,
         )
         if cache_key in self._line_cache:
             return self._line_cache[cache_key]
@@ -264,6 +283,20 @@ class DiffView(ScrollView):
                 bg = _BG_ADDED
             elif line.kind == "removed":
                 bg = _BG_REMOVED
+
+        # Search match highlighting
+        if self._search_term:
+            plain = text.plain
+            try:
+                pat = re.escape(self._search_term)
+                for m in re.finditer(pat, plain, re.IGNORECASE):
+                    is_current = 0 <= self._current_match < len(
+                        self._search_matches
+                    ) and self._search_matches[self._current_match] == (idx, m.start())
+                    style = _SEARCH_CURRENT if is_current else _SEARCH_HIGHLIGHT
+                    text.stylize(style, m.start(), m.end())
+            except re.error:
+                pass
 
         # Selection overrides
         if sel_range and sel_range[0] <= idx <= sel_range[1]:
@@ -423,3 +456,84 @@ class DiffView(ScrollView):
 
     def action_edit_comment(self) -> None:
         self.post_message(self.EditCommentAtCursor())
+
+    def action_search(self) -> None:
+        self.post_message(self.SearchRequested())
+
+    # -- Search --
+
+    def set_search(self, term: str) -> None:
+        """Set search term, find all matches, jump to first match after cursor."""
+        self._search_term = term
+        self._search_matches = []
+        self._current_match = -1
+
+        if not term or not self._diff_file:
+            self._invalidate()
+            return
+
+        pattern = re.escape(term)
+        for i, line in enumerate(self._diff_file.lines):
+            # Search in the plain_text content of each line
+            for m in re.finditer(pattern, line.plain_text, re.IGNORECASE):
+                self._search_matches.append((i, m.start()))
+
+        if self._search_matches:
+            # Jump to first match at or after cursor
+            for idx, (line_idx, _col) in enumerate(self._search_matches):
+                if line_idx >= self._cursor_pos:
+                    self._current_match = idx
+                    self._cursor_pos = line_idx
+                    break
+            else:
+                # Wrap to first match
+                self._current_match = 0
+                self._cursor_pos = self._search_matches[0][0]
+
+        self._line_cache.clear()
+        self.refresh()
+        self._scroll_to_cursor()
+
+    def next_match(self) -> None:
+        """Jump to the next search match."""
+        if not self._search_matches:
+            return
+        self._current_match = (self._current_match + 1) % len(self._search_matches)
+        self._cursor_pos = self._search_matches[self._current_match][0]
+        self._line_cache.clear()
+        self.refresh()
+        self._scroll_to_cursor()
+
+    def prev_match(self) -> None:
+        """Jump to the previous search match."""
+        if not self._search_matches:
+            return
+        self._current_match = (self._current_match - 1) % len(self._search_matches)
+        self._cursor_pos = self._search_matches[self._current_match][0]
+        self._line_cache.clear()
+        self.refresh()
+        self._scroll_to_cursor()
+
+    def _clear_search(self) -> None:
+        """Clear search state without re-rendering."""
+        self._search_term = ""
+        self._search_matches = []
+        self._current_match = -1
+
+    def clear_search(self) -> None:
+        """Clear search and re-render."""
+        self._clear_search()
+        self._line_cache.clear()
+        self.refresh()
+
+    @property
+    def search_info(self) -> str:
+        """Return search status string for the status bar."""
+        if not self._search_term:
+            return ""
+        if not self._search_matches:
+            return f" | /{self._search_term} [no matches]"
+        return (
+            f" | /{self._search_term} "
+            f"[{self._current_match + 1}/{len(self._search_matches)}]"
+        )
