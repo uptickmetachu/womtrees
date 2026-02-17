@@ -15,8 +15,19 @@ def sanitize_session_name(name: str) -> str:
     return name
 
 
-def create_session(name: str, working_dir: str) -> tuple[str, str]:
+def create_session(
+    name: str,
+    working_dir: str,
+    env: dict[str, str] | None = None,
+) -> tuple[str, str]:
     """Create a detached tmux session.
+
+    Args:
+        name: Session name (will be sanitized).
+        working_dir: Working directory for the initial pane.
+        env: Environment variables to set on the session. These are available
+            in the initial pane's shell (via ``-e``) and in all subsequent
+            panes (via the session environment).
 
     Returns (session_name, initial_pane_id) where pane_id is like '%0'.
     """
@@ -29,20 +40,12 @@ def create_session(name: str, working_dir: str) -> tuple[str, str]:
             i += 1
         name = f"{name}-{i}"
 
-    result = _run(
-        [
-            "tmux",
-            "new-session",
-            "-d",
-            "-s",
-            name,
-            "-c",
-            working_dir,
-            "-P",
-            "-F",
-            "#{pane_id}",
-        ],
-    )
+    cmd: list[str] = ["tmux", "new-session", "-d", "-s", name]
+    for key, value in (env or {}).items():
+        cmd.extend(["-e", f"{key}={value}"])
+    cmd.extend(["-c", working_dir, "-P", "-F", "#{pane_id}"])
+
+    result = _run(cmd)
     pane_id = result.stdout.strip()
     return name, pane_id
 

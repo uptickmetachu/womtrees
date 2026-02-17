@@ -239,21 +239,14 @@ def test_start_creates_tmux_session(runner, db_conn, tmp_path) -> None:
         assert "myrepo/feat-x" in result.output
 
         mock_create.assert_called_once()
-        mock_setenv.assert_any_call(
-            "myrepo/feat-x",
-            "WOMTREE_WORK_ITEM_ID",
-            "1",
-        )
-        mock_setenv.assert_any_call(
-            "myrepo/feat-x",
-            "WOMTREE_NAME",
-            "test-prompt",
-        )
-        mock_setenv.assert_any_call(
-            "myrepo/feat-x",
-            "WOMTREE_BRANCH",
-            "feat/x",
-        )
+        # Env vars are now passed directly to create_session via env=
+        _args, _kwargs = mock_create.call_args
+        env = _kwargs.get("env") or (_args[2] if len(_args) > 2 else None)
+        assert env == {
+            "WOMTREE_WORK_ITEM_ID": "1",
+            "WOMTREE_NAME": "test-prompt",
+            "WOMTREE_BRANCH": "feat/x",
+        }
         mock_split.assert_called_once()
         mock_swap.assert_called_once()  # claude_pane=left triggers swap
 
@@ -441,7 +434,11 @@ def test_attach_restores_missing_session(runner, db_conn) -> None:
         assert result.exit_code == 0
         assert "Restored tmux session" in result.output
         mock_create.assert_called_once()
-        assert mock_setenv.call_count == 3
+        # Env vars are now passed directly to create_session via env=
+        _args, _kwargs = mock_create.call_args
+        env = _kwargs.get("env") or (_args[2] if len(_args) > 2 else None)
+        assert env is not None
+        assert "WOMTREE_WORK_ITEM_ID" in env
         mock_attach.assert_called_once()
 
 

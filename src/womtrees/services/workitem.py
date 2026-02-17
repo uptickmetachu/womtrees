@@ -140,14 +140,16 @@ def start_work_item(conn: sqlite3.Connection, item_id: int, config: Config) -> W
     update_work_item(conn, item_id, worktree_path=str(wt_path))
 
     try:
-        # Create tmux session
+        # Create tmux session with env vars available in all panes
         session_name = f"{item.repo_name}/{sanitize_branch_name(item.branch)}"
-        session_name, shell_pane_id = tmux.create_session(session_name, str(wt_path))
-
-        # Set environment variables for Claude hook detection and user scripts
-        tmux.set_environment(session_name, "WOMTREE_WORK_ITEM_ID", str(item_id))
-        tmux.set_environment(session_name, "WOMTREE_NAME", item.name or "")
-        tmux.set_environment(session_name, "WOMTREE_BRANCH", item.branch)
+        session_env = {
+            "WOMTREE_WORK_ITEM_ID": str(item_id),
+            "WOMTREE_NAME": item.name or "",
+            "WOMTREE_BRANCH": item.branch,
+        }
+        session_name, shell_pane_id = tmux.create_session(
+            session_name, str(wt_path), env=session_env
+        )
 
         # Split pane: creates a second pane for Claude
         claude_pane_id = tmux.split_pane(session_name, config.tmux_split, str(wt_path))
