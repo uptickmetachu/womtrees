@@ -7,6 +7,7 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
+from textual.events import Key
 from textual.widgets import Footer, Header, Static, Tree
 
 from womtrees.diff import DiffResult, ReviewComment
@@ -45,8 +46,8 @@ class DiffApp(App[None]):
         Binding("q", "quit", "Quit", show=True),
         Binding("question_mark", "help", "Help", show=True),
         Binding("tab", "toggle_focus", "Toggle focus", show=False),
-        Binding("shift+j", "next_file", "Next file", show=False),
-        Binding("shift+k", "prev_file", "Prev file", show=False),
+        Binding("shift+j", "next_file", "Next file", show=False, priority=True),
+        Binding("shift+k", "prev_file", "Prev file", show=False, priority=True),
         Binding(
             "ctrl+s", "submit_clipboard", "Submit (clipboard)", show=True, priority=True
         ),
@@ -89,6 +90,17 @@ class DiffApp(App[None]):
             self._load_file(0)
 
         self._update_status()
+
+    def on_key(self, event: Key) -> None:
+        """Map j/k to tree navigation when tree is focused."""
+        tree = self.query_one("#file-tree", Tree)
+        if self.focused is tree or (self.focused and tree in self.focused.ancestors):
+            if event.key == "j":
+                tree.action_cursor_down()
+                event.prevent_default()
+            elif event.key == "k":
+                tree.action_cursor_up()
+                event.prevent_default()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
         if event.node.data is not None:
