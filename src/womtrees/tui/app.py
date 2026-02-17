@@ -1035,14 +1035,19 @@ class WomtreesApp(App[None]):
 
         repo_path = item.worktree_path or item.repo_path
 
-        from womtrees.diff import compute_diff
+        import shutil
+        import subprocess
 
-        diff_result = compute_diff(repo_path)
-
-        from womtrees.tui.diff_app import DiffApp
+        wt_bin = shutil.which("wt")
+        if not wt_bin:
+            self.notify("Could not find 'wt' command", severity="error")
+            return
 
         with self.suspend():
-            DiffApp(diff_result=diff_result, repo_path=repo_path).run()
+            subprocess.run(
+                [wt_bin, "review-diff", str(item.id)],
+                cwd=repo_path,
+            )
 
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
