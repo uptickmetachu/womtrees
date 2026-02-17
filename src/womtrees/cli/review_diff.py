@@ -18,10 +18,10 @@ def review_diff_cmd(
 
     Optionally pass a work item ID. If omitted, auto-detects from worktree context.
     """
-    from womtrees.diff import compute_diff
-    from womtrees.worktree import get_current_repo
+    import os
 
-    repo_path: str | None = None
+    from womtrees.diff import compute_diff
+
     tmux_pane: str | None = None
 
     if item_id is not None:
@@ -35,17 +35,8 @@ def review_diff_cmd(
             raise SystemExit(1)
         repo_path = item.worktree_path or item.repo_path
     else:
-        if uncommitted:
-            # For uncommitted diffs, use cwd (could be a worktree)
-            import os
-
-            repo_path = os.getcwd()
-        else:
-            repo_info = get_current_repo()
-            if repo_info is None:
-                click.echo("Not inside a git repository.", err=True)
-                raise SystemExit(1)
-            _repo_name, repo_path = repo_info
+        # Use cwd so HEAD resolves to the worktree's branch, not the main repo's
+        repo_path = os.getcwd()
 
     assert repo_path is not None
 

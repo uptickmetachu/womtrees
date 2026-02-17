@@ -132,7 +132,7 @@ def _highlight_lines(text: str, language: str | None) -> list[str]:
     except ClassNotFound:
         return text.splitlines()
 
-    formatter = Terminal256Formatter()
+    formatter = Terminal256Formatter(style="monokai")
     highlighted = pyg_highlight(text, lexer, formatter)
     # Split into lines, stripping trailing reset if present
     lines = highlighted.splitlines()
@@ -293,16 +293,9 @@ def compute_diff(
         label_target = "working tree"
         actual_base = "HEAD"
     else:
-        # Branch diff: base_ref vs working tree (committed + uncommitted)
-        committed = list_changed_files(repo_path, base_ref, target_ref)
-        uncommitted_files = list_uncommitted_files(repo_path)
-        seen = set(committed)
-        files = committed + [f for f in uncommitted_files if f not in seen]
+        files = list_changed_files(repo_path, base_ref, target_ref)
         label_target = target_ref
         actual_base = base_ref
-
-    # Always diff against working tree so uncommitted edits are visible
-    use_working_tree = True
 
     diff_files: list[DiffFile] = []
     for f in files:
@@ -311,7 +304,7 @@ def compute_diff(
             f,
             actual_base,
             target_ref,
-            uncommitted=use_working_tree,
+            uncommitted=uncommitted,
         )
         if diff_file.lines:
             diff_files.append(diff_file)

@@ -12,12 +12,19 @@ from textual.widgets import RichLog
 
 from womtrees.diff import DiffFile, DiffLine, ReviewComment
 
-# Background colors for diff line types
-_BG_ADDED = "#1a3a1a"
-_BG_REMOVED = "#3a1a1a"
-_BG_HUNK = "#2a2a3a"
-_BG_SELECTION = "#3a3a5a"
-_BG_COMMENT = "#2a2a1a"
+# Background colors for diff line types — subtle tints that don't wash out syntax
+_BG_ADDED = "#0d2611"
+_BG_REMOVED = "#2d0f0f"
+_BG_HUNK = "#1c1c1c"
+_BG_SELECTION = "#3a3a3a"
+_BG_COMMENT = "#2a2210"
+_BG_CURSOR = "#262626"
+
+# Gutter styling
+_GUTTER_STYLE = "dim"
+_PREFIX_ADDED = "bold green"
+_PREFIX_REMOVED = "bold red"
+_HUNK_STYLE = "bold cyan"
 
 
 class DiffView(RichLog):
@@ -130,35 +137,40 @@ class DiffView(RichLog):
         commented_lines: set[int],
     ) -> Text:
         """Build a Rich Text for a single diff line."""
-        # Gutter: line numbers + kind marker
-        if line.kind == "hunk_header":
-            gutter = "        "
-            prefix = ""
+        text = Text()
+
+        # Comment marker
+        if idx in commented_lines:
+            text.append("\u25cf ", style="yellow")
         else:
+            text.append("  ")
+
+        # Hunk header — styled differently, no gutter
+        if line.kind == "hunk_header":
+            text.append(line.plain_text, style=_HUNK_STYLE)
+            bg = _BG_HUNK
+        else:
+            # Gutter: line numbers
             old_no = f"{line.old_line_no:>4}" if line.old_line_no else "    "
             new_no = f"{line.new_line_no:>4}" if line.new_line_no else "    "
-            gutter = f"{old_no} {new_no} "
+            text.append(f"{old_no} {new_no} ", style=_GUTTER_STYLE)
+
+            # Prefix (+/-/space)
             if line.kind == "added":
-                prefix = "+"
+                text.append("+", style=_PREFIX_ADDED)
             elif line.kind == "removed":
-                prefix = "-"
+                text.append("-", style=_PREFIX_REMOVED)
             else:
-                prefix = " "
+                text.append(" ")
 
-        # Comment marker in gutter
-        marker = "\u25cf " if idx in commented_lines else "  "
+            # Syntax-highlighted code
+            text.append_text(Text.from_ansi(line.highlighted))
 
-        # Build text from ANSI-highlighted source
-        text = Text.from_ansi(f"{marker}{gutter}{prefix}{line.highlighted}")
-
-        # Apply background based on line kind
-        bg: str | None = None
-        if line.kind == "added":
-            bg = _BG_ADDED
-        elif line.kind == "removed":
-            bg = _BG_REMOVED
-        elif line.kind == "hunk_header":
-            bg = _BG_HUNK
+            bg = None
+            if line.kind == "added":
+                bg = _BG_ADDED
+            elif line.kind == "removed":
+                bg = _BG_REMOVED
 
         # Selection overrides
         if sel_range and sel_range[0] <= idx <= sel_range[1]:
@@ -170,10 +182,8 @@ class DiffView(RichLog):
 
         # Cursor line highlight
         if idx == self._cursor_pos:
-            if bg:
-                text.stylize(f"on {bg} bold")
-            else:
-                text.stylize("bold reverse")
+            bg = bg or _BG_CURSOR
+            text.stylize(f"on {bg} bold")
         elif bg:
             text.stylize(f"on {bg}")
 
