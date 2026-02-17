@@ -67,7 +67,8 @@ class DuplicateBranchError(Exception):
         self.branch = branch
         self.existing_item_id = existing_item_id
         super().__init__(
-            f"Branch '{branch}' is already used by active WorkItem #{existing_item_id}.",
+            f"Branch '{branch}' is already used by "
+            f"active WorkItem #{existing_item_id}.",
         )
 
 
@@ -340,7 +341,9 @@ def edit_work_item(
 
         # Check for duplicate active branches
         row = conn.execute(
-            "SELECT id FROM work_items WHERE repo_name = ? AND branch = ? AND status != 'done' AND id != ?",
+            "SELECT id FROM work_items"
+            " WHERE repo_name = ? AND branch = ?"
+            " AND status != 'done' AND id != ?",
             (item.repo_name, branch, item.id),
         ).fetchone()
         if row:

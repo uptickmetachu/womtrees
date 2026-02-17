@@ -34,7 +34,9 @@ class CreateDialog(ModalScreen[dict[str, str | None] | None]):
         margin: 1 0 0 0;
     }
 
-    CreateDialog #dialog Input, CreateDialog #dialog TextArea, CreateDialog #dialog Select {
+    CreateDialog #dialog Input,
+    CreateDialog #dialog TextArea,
+    CreateDialog #dialog Select {
         margin: 0 0 1 0;
     }
 

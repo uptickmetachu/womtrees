@@ -800,7 +800,10 @@ class WomtreesApp(App[None]):
 
         item = card.work_item
         if item.status == "working":
-            msg = f"Delete #{item.id} ({item.branch})?\nThis item is still WORKING — force delete?"
+            msg = (
+                f"Delete #{item.id} ({item.branch})?\n"
+                f"This item is still WORKING — force delete?"
+            )
         else:
             msg = f"Delete #{item.id} ({item.branch}, status={item.status})?"
 

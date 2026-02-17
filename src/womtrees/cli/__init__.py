@@ -8,9 +8,9 @@ import click
 # hijack tracebacks with fancy formatting that breaks CI and log parsing.
 sys.excepthook = sys.__excepthook__
 
-from womtrees.cli.admin import board, config, sqlite_cmd
-from womtrees.cli.hooks import hook
-from womtrees.cli.info import (
+from womtrees.cli.admin import board, config, sqlite_cmd  # noqa: E402
+from womtrees.cli.hooks import hook  # noqa: E402
+from womtrees.cli.info import (  # noqa: E402
     _maybe_resume_claude,
     _restore_tmux_session,
     attach,
@@ -20,7 +20,7 @@ from womtrees.cli.info import (
     sessions_cmd,
     status,
 )
-from womtrees.cli.items import (
+from womtrees.cli.items import (  # noqa: E402
     create,
     delete,
     done,

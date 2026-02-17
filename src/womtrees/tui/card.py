@@ -166,7 +166,8 @@ class WorkItemCard(Widget, can_focus=True):
         parts: list[str] = []
         if self.git_stats.insertions or self.git_stats.deletions:
             parts.append(
-                f"[green]+{self.git_stats.insertions}[/] [red]-{self.git_stats.deletions}[/]",
+                f"[green]+{self.git_stats.insertions}[/] "
+                f"[red]-{self.git_stats.deletions}[/]",
             )
         if self.git_stats.uncommitted:
             uc = "[yellow]\\[uncommitted"

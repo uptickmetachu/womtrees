@@ -49,8 +49,10 @@ CREATE TABLE IF NOT EXISTS claude_sessions (
     updated_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item ON claude_sessions(work_item_id);
-CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state);
+CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item
+    ON claude_sessions(work_item_id);
+CREATE INDEX IF NOT EXISTS idx_claude_sessions_state
+    ON claude_sessions(state);
 
 CREATE TABLE IF NOT EXISTS pull_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,8 +93,10 @@ MIGRATIONS = {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )""",
-        "CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item ON claude_sessions(work_item_id)",
-        "CREATE INDEX IF NOT EXISTS idx_claude_sessions_state ON claude_sessions(state)",
+        "CREATE INDEX IF NOT EXISTS idx_claude_sessions_work_item"
+        " ON claude_sessions(work_item_id)",
+        "CREATE INDEX IF NOT EXISTS idx_claude_sessions_state"
+        " ON claude_sessions(state)",
     ],
     4: ["ALTER TABLE claude_sessions ADD COLUMN claude_session_id TEXT"],
     5: ["ALTER TABLE work_items ADD COLUMN name TEXT"],
@@ -108,7 +112,8 @@ MIGRATIONS = {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )""",
-        "CREATE INDEX IF NOT EXISTS idx_pull_requests_work_item ON pull_requests(work_item_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pull_requests_work_item"
+        " ON pull_requests(work_item_id)",
     ],
     7: [
         """CREATE TABLE IF NOT EXISTS repos (
@@ -240,7 +245,8 @@ def create_work_item(
 ) -> WorkItem:
     # Guard against duplicate active branches in the same repo
     cursor = conn.execute(
-        "SELECT id FROM work_items WHERE repo_name = ? AND branch = ? AND status != 'done'",
+        "SELECT id FROM work_items"
+        " WHERE repo_name = ? AND branch = ? AND status != 'done'",
         (repo_name, branch),
     )
     existing = cursor.fetchone()
@@ -252,7 +258,9 @@ def create_work_item(
     upsert_repo(conn, repo_name, repo_path)
     now = _now()
     cursor = conn.execute(
-        """INSERT INTO work_items (repo_name, repo_path, branch, name, prompt, status, created_at, updated_at)
+        """INSERT INTO work_items
+           (repo_name, repo_path, branch, name, prompt,
+            status, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (repo_name, repo_path, branch, name, prompt, status, now, now),
     )
@@ -336,7 +344,9 @@ def create_claude_session(
     now = _now()
     cursor = conn.execute(
         """INSERT INTO claude_sessions
-           (work_item_id, repo_name, repo_path, branch, tmux_session, tmux_pane, pid, state, prompt, claude_session_id, created_at, updated_at)
+           (work_item_id, repo_name, repo_path, branch,
+            tmux_session, tmux_pane, pid, state, prompt,
+            claude_session_id, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             work_item_id,
@@ -444,7 +454,9 @@ def find_claude_session(
 ) -> ClaudeSession | None:
     """Find a Claude session by tmux session and pane."""
     cursor = conn.execute(
-        "SELECT * FROM claude_sessions WHERE tmux_session = ? AND tmux_pane = ? ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM claude_sessions"
+        " WHERE tmux_session = ? AND tmux_pane = ?"
+        " ORDER BY id DESC LIMIT 1",
         (tmux_session, tmux_pane),
     )
     row = cursor.fetchone()

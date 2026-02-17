@@ -50,8 +50,8 @@ class HelpDialog(ModalScreen[None]):
             yield Label("")
             yield Button("Close", id="close")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    def on_button_pressed(self, _event: Button.Pressed) -> None:
         self.dismiss()
 
-    def action_dismiss(self, result: object = None) -> None:  # type: ignore[override]
+    def action_dismiss(self, _result: object = None) -> None:  # type: ignore[override]
         self.app.pop_screen()
